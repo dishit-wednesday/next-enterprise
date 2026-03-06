@@ -7,6 +7,7 @@
 
 import { useEffect, useRef, useState } from "react"
 
+import { FloatingNotes } from "components/FloatingNotes/FloatingNotes"
 import { HomeContent } from "components/HomeContent/HomeContent"
 import { SearchResults } from "components/SearchResults/SearchResults"
 import { Sidebar } from "components/Sidebar/Sidebar"
@@ -29,6 +30,7 @@ export default function HomePage() {
   const [artists, setArtists] = useState<ItunesArtist[]>([])
   const [isLoadingSearch, setIsLoadingSearch] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const debouncedQuery = useDebounce(query.trim(), SEARCH_DEBOUNCE_MS)
@@ -73,7 +75,13 @@ export default function HomePage() {
 
   return (
     <div className="flex h-screen overflow-hidden pb-[72px] box-border bg-bg">
-      <Sidebar activeView={activeView} onNavClick={handleNavClick} />
+      <FloatingNotes />
+      <Sidebar
+        activeView={activeView}
+        onNavClick={handleNavClick}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
+      />
 
       <div className="flex-1 flex flex-col overflow-hidden bg-bg">
         <TopNav

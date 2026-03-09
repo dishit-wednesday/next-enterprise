@@ -56,6 +56,17 @@ export async function fetchTrendingSongs(): Promise<ItunesTrack[]> {
   return trackIds.map((id) => trackMap.get(id)).filter((t): t is ItunesTrack => t !== undefined)
 }
 
+export async function fetchTracksByIds(ids: number[]): Promise<ItunesTrack[]> {
+  if (!ids.length) return []
+  const lookupResponse = await fetch(`/api/itunes/lookup?ids=${ids.join(",")}`)
+  if (!lookupResponse.ok) return []
+
+  const lookupData = (await lookupResponse.json()) as ItunesSearchResponse<ItunesTrack>
+  return lookupData.results.filter(
+    (r) => (r as { wrapperType: string }).wrapperType === "track"
+  )
+}
+
 export async function fetchTopAlbums(): Promise<ItunesAlbum[]> {
   const response = await fetch("/api/itunes/rss?feed=topalbums&limit=20")
   if (!response.ok) return []

@@ -11,6 +11,7 @@ import { useRequireAuth } from "lib/hooks/useRequireAuth"
 import type { ItunesTrack } from "lib/itunes/types"
 import { formatDuration } from "lib/itunes/utils"
 import { usePlayerStore } from "store/usePlayerStore"
+import { AddToPlaylistButton } from "components/AddToPlaylistButton/AddToPlaylistButton"
 
 interface SongCardProps {
   track: ItunesTrack
@@ -79,6 +80,9 @@ export function SongCard({ track }: SongCardProps) {
       <span className="text-xs text-muted shrink-0 mr-2">
         {formatDuration(track.trackTimeMillis)}
       </span>
+
+      {/* Add To Playlist button */}
+      <AddToPlaylistButton trackId={track.trackId} />
 
       {/* Play button */}
       <button

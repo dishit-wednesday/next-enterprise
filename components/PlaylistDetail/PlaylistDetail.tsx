@@ -6,7 +6,7 @@
 import { useEffect, useState } from "react"
 import { useAuth } from "@clerk/nextjs"
 
-import { ChevronLeftIcon, CloseIcon, LinkIcon, UsersIcon } from "components/icons"
+import { ChevronLeftIcon, CloseIcon, LinkIcon, PlayIcon, ShuffleIcon, UsersIcon } from "components/icons"
 import { SharePlaylistModal } from "components/SharePlaylistModal/SharePlaylistModal"
 import { Skeleton } from "components/Skeleton/Skeleton"
 import { SongCard } from "components/SongCard/SongCard"
@@ -15,6 +15,8 @@ import { getPlaylist, removeTrack } from "lib/api/playlists"
 import type { Playlist, PlaylistTrack } from "lib/api/playlists"
 import { fetchTracksByIds } from "lib/itunes/api"
 import type { ItunesTrack } from "lib/itunes/types"
+import { usePlayerStore } from "store/usePlayerStore"
+import { cn } from "lib/cn"
 
 interface PlaylistDetailProps {
   playlistId: string
@@ -29,6 +31,7 @@ export function PlaylistDetail({ playlistId, onBack, initialData }: PlaylistDeta
   const [isLoading, setIsLoading] = useState(!initialData)
   const [isSharing, setIsSharing] = useState(false)
   const { userId: currentUserId } = useAuth()
+  const { playContext, isShuffled, toggleShuffle } = usePlayerStore()
 
   useEffect(() => {
     async function loadDetail() {
@@ -85,6 +88,20 @@ export function PlaylistDetail({ playlistId, onBack, initialData }: PlaylistDeta
     } catch (err) {
       console.error("Failed to remove track", err)
     }
+  }
+
+  function handlePlayPlaylist() {
+    if (enrichedTracks.length === 0) return
+    playContext(enrichedTracks, 0)
+  }
+
+  function handleShufflePlaylist() {
+    if (enrichedTracks.length === 0) return
+    if (!isShuffled) {
+      toggleShuffle()
+    }
+    const startIndex = Math.floor(Math.random() * enrichedTracks.length)
+    playContext(enrichedTracks, startIndex)
   }
 
   if (isLoading) {
@@ -167,18 +184,42 @@ export function PlaylistDetail({ playlistId, onBack, initialData }: PlaylistDeta
           </p>
         )}
 
-        <div className="flex items-center gap-4 mt-4">
-          <p className="text-xs font-bold text-[#52525b] m-0 uppercase tracking-[0.1em]">
-            {playlist.tracks?.length || 0} track{playlist.tracks?.length !== 1 ? "s" : ""}
-          </p>
-          {playlist.userId === currentUserId && (playlist._count?.shares || 0) > 0 && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20">
-              <span className="size-1.5 rounded-full bg-primary animate-pulse" />
-              <span className="text-[10px] font-bold text-primary uppercase tracking-wider">
-                Shared with {playlist._count?.shares} {playlist._count?.shares === 1 ? 'person' : 'people'}
-              </span>
-            </div>
-          )}
+        <div className="flex items-center gap-4 md:gap-6 mt-6">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handlePlayPlaylist}
+              disabled={enrichedTracks.length === 0}
+              className={cn(
+                "flex items-center justify-center size-12 md:size-14 rounded-full bg-primary text-bg hover:scale-105 transition-all shadow-glow-sm cursor-pointer border-0 disabled:opacity-50 disabled:cursor-not-allowed",
+              )}
+            >
+              <PlayIcon width={24} height={24} className="ml-1" />
+            </button>
+            <button
+              onClick={handleShufflePlaylist}
+              disabled={enrichedTracks.length === 0}
+              className={cn(
+                "flex items-center justify-center size-10 md:size-12 rounded-full border border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed",
+              )}
+              title="Shuffle"
+            >
+              <ShuffleIcon width={20} height={20} />
+            </button>
+          </div>
+          
+          <div className="flex items-center gap-3 md:gap-4">
+            <p className="text-[11px] md:text-xs font-bold text-[#52525b] m-0 uppercase tracking-[0.1em] shrink-0">
+              {playlist.tracks?.length || 0} track{playlist.tracks?.length !== 1 ? "s" : ""}
+            </p>
+            {playlist.userId === currentUserId && (playlist._count?.shares || 0) > 0 && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20 shrink-0">
+                <span className="size-1.5 rounded-full bg-primary animate-pulse hidden xs:block" />
+                <span className="text-[9px] md:text-[10px] font-bold text-primary uppercase tracking-wider">
+                   {playlist._count?.shares} {playlist._count?.shares === 1 ? 'Share' : 'Shares'}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -192,7 +233,7 @@ export function PlaylistDetail({ playlistId, onBack, initialData }: PlaylistDeta
         ) : (
           enrichedTracks.map((track, i) => (
             <div key={`${track.trackId}-${i}`} className="group relative pr-10 sm:pr-12">
-              <SongCard track={track} />
+              <SongCard track={track} context={enrichedTracks} contextIndex={i} />
               <button
                 onClick={() => handleRemove(track.trackId)}
                 className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 size-7 sm:size-8 rounded-full bg-red-500/10 text-red-400 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center border-0 cursor-pointer hover:bg-red-500/20"

@@ -4,9 +4,9 @@
 // wednesday-dev: formatDuration helper, handlePlay event handler
 
 import Image from "next/image"
-import { useFeatureFlagEnabled } from "posthog-js/react"
 
-import { AddToPlaylistButton } from "components/AddToPlaylistButton/AddToPlaylistButton"
+import { LikeButton } from "components/LikeButton/LikeButton"
+import { TrackContextMenu } from "components/TrackContextMenu/TrackContextMenu"
 import { EqualizerIcon, PauseIcon, PlayIcon } from "components/icons"
 import { cn } from "lib/cn"
 import { useRequireAuth } from "lib/hooks/useRequireAuth"
@@ -16,12 +16,14 @@ import { usePlayerStore } from "store/usePlayerStore"
 
 interface SongCardProps {
   track: ItunesTrack
+  context?: ItunesTrack[]
+  contextIndex?: number
+  playbackContext?: "search" | "library" | "album" | null
 }
 
-export function SongCard({ track }: SongCardProps) {
-  const { currentTrack, isPlaying, playTrack, togglePlay } = usePlayerStore()
+export function SongCard({ track, context, contextIndex, playbackContext }: SongCardProps) {
+  const { currentTrack, isPlaying, playTrack, playContext, togglePlay } = usePlayerStore()
   const { requireAuth } = useRequireAuth()
-  const isPlaylistEnabled = useFeatureFlagEnabled("playlist-feature") ?? false
   const isCurrentTrack = currentTrack?.trackId === track.trackId
   const isActiveAndPlaying = isCurrentTrack && isPlaying
 
@@ -31,7 +33,11 @@ export function SongCard({ track }: SongCardProps) {
       if (isCurrentTrack) {
         togglePlay()
       } else {
-        playTrack(track)
+        if (context && contextIndex !== undefined) {
+          playContext(context, contextIndex, playbackContext)
+        } else {
+          playTrack(track, playbackContext)
+        }
       }
     })
   }
@@ -87,8 +93,13 @@ export function SongCard({ track }: SongCardProps) {
         {formatDuration(track.trackTimeMillis)}
       </span>
 
-      {/* Add To Playlist button */}
-      {isPlaylistEnabled && <AddToPlaylistButton trackId={track.trackId} />}
+      {/* Heart / Like button */}
+      <LikeButton trackId={track.trackId} size={18} />
+
+      {/* 3-dot context menu */}
+      <div className="transition-opacity">
+        <TrackContextMenu track={track} />
+      </div>
 
       {/* Play button */}
       <button
@@ -99,7 +110,7 @@ export function SongCard({ track }: SongCardProps) {
           "size-8 rounded-full border-0 flex items-center justify-center shrink-0 transition-all duration-200",
           isActiveAndPlaying
             ? "bg-gradient-brand shadow-glow-sm"
-            : "bg-surface-elevated opacity-0 group-hover:opacity-100",
+            : "bg-surface-elevated hidden md:flex opacity-0 group-hover:opacity-100",
           !track.previewUrl && "cursor-not-allowed !opacity-40"
         )}
       >

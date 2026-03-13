@@ -43,7 +43,7 @@ export function SearchResults({ songs, albums, artists, isLoading, hasSearched, 
                 className="animate-fade-in-up"
                 style={{ animationDelay: `${i * 30}ms` }}
               >
-                <SongCard track={track} />
+                <SongCard track={track} playbackContext="search" />
               </div>
             ))}
           </div>

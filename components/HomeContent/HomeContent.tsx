@@ -75,7 +75,7 @@ export function HomeContent({ activeView, onNavClick }: HomeContentProps) {
             <div key={track.trackId} className="flex items-center gap-2">
               <span className="w-5 text-xs text-muted text-right shrink-0">{index + 1}</span>
               <div className="flex-1">
-                <SongCard track={track} />
+                <SongCard track={track} context={trendingSongs} contextIndex={index} />
               </div>
             </div>
           ))}
@@ -185,7 +185,7 @@ export function HomeContent({ activeView, onNavClick }: HomeContentProps) {
               <div key={track.trackId} className="flex items-center gap-4 w-full group">
                 <span className="w-5 text-sm font-bold text-muted text-right group-hover:text-primary transition-colors">{idx + 1}</span>
                 <div className="flex-1 min-w-0">
-                  <SongCard track={track} />
+                  <SongCard track={track} context={restSongs} contextIndex={idx} />
                 </div>
               </div>
             ))}
@@ -193,7 +193,7 @@ export function HomeContent({ activeView, onNavClick }: HomeContentProps) {
         </section>
       )}
 
-      {/* Popular Artists */}
+
       {(filter === "all" || filter === "music") && (
         <section className="mb-16">
           <div className="flex items-end justify-between mb-6">
@@ -264,9 +264,9 @@ export function HomeContent({ activeView, onNavClick }: HomeContentProps) {
             <button onClick={() => onNavClick("songs")} className="text-xs font-bold text-muted hover:text-primary transition-colors tracking-widest hidden sm:block">See All</button>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-6">
-            {discoverSongs.map((track) => (
+            {discoverSongs.map((track, idx) => (
               <div key={track.trackId}>
-                <TrackTile track={track} />
+                <TrackTile track={track} context={discoverSongs} contextIndex={idx} />
               </div>
             ))}
           </div>
@@ -367,8 +367,8 @@ function ArtistTile({ artist, onNavClick }: { artist: ItunesArtist, onNavClick?:
   )
 }
 
-function TrackTile({ track }: { track: ItunesTrack }) {
-  const { currentTrack, isPlaying, playTrack, togglePlay } = usePlayerStore()
+function TrackTile({ track, context, contextIndex }: { track: ItunesTrack; context?: ItunesTrack[]; contextIndex?: number }) {
+  const { currentTrack, isPlaying, playTrack, playContext, togglePlay } = usePlayerStore()
   const { requireAuth } = useRequireAuth()
   const artworkUrl = track.artworkUrl100.replace("100x100", "300x300")
   const isCurrentTrack = currentTrack?.trackId === track.trackId
@@ -381,7 +381,11 @@ function TrackTile({ track }: { track: ItunesTrack }) {
       if (isCurrentTrack) {
         togglePlay()
       } else {
-        playTrack(track)
+        if (context && contextIndex !== undefined) {
+          playContext(context, contextIndex)
+        } else {
+          playTrack(track)
+        }
       }
     })
   }

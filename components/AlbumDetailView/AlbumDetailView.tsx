@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import Image from "next/image"
 import { useSearchParams } from "next/navigation"
 
-import { ChevronLeftIcon, PlayIcon } from "components/icons"
+import { ChevronLeftIcon, PlayIcon, ShuffleIcon } from "components/icons"
 import { Skeleton } from "components/Skeleton/Skeleton"
 import { SongCard } from "components/SongCard/SongCard"
 
@@ -22,7 +22,7 @@ interface AlbumDetailViewProps {
 export function AlbumDetailView({ onBack }: AlbumDetailViewProps) {
   const searchParams = useSearchParams()
   const selectedAlbumId = searchParams.get("id")
-  const { playTrack } = usePlayerStore()
+  const { playContext, isShuffled, toggleShuffle } = usePlayerStore()
   const { requireAuth } = useRequireAuth()
   
   const [album, setAlbum] = useState<ItunesAlbum | null>(null)
@@ -86,8 +86,21 @@ export function AlbumDetailView({ onBack }: AlbumDetailViewProps) {
   function handlePlayAlbum() {
     if (!firstPlayableTrack) return
     requireAuth(() => {
-      // For now, just play the first track. Ideally, this would queue the album.
-      playTrack(firstPlayableTrack)
+      const startIndex = tracks.findIndex(t => t.trackId === firstPlayableTrack.trackId)
+      playContext(tracks, startIndex >= 0 ? startIndex : 0)
+    })
+  }
+
+  function handleShuffleAlbum() {
+    if (!firstPlayableTrack) return
+    requireAuth(() => {
+      // If shuffle is not on, turn it on
+      if (!isShuffled) {
+        toggleShuffle()
+      }
+      // Start playing
+      const startIndex = Math.floor(Math.random() * tracks.length)
+      playContext(tracks, startIndex)
     })
   }
 
@@ -103,38 +116,50 @@ export function AlbumDetailView({ onBack }: AlbumDetailViewProps) {
       </button>
 
       {/* Header */}
-      <header className="flex flex-col md:flex-row gap-6 md:items-end">
+      <header className="flex flex-col items-center md:items-end md:flex-row gap-6 text-center md:text-left">
         <Image
           src={artworkUrl}
           alt={album.collectionName}
           width={220}
           height={220}
-          className="rounded-xl shadow-2xl shrink-0"
+          className="rounded-xl shadow-2xl shrink-0 w-32 h-32 md:w-[220px] md:h-[220px] object-cover"
           priority
         />
-        <div className="flex flex-col justify-end">
+        <div className="flex flex-col items-center md:items-start justify-end">
           <span className="text-xs font-bold uppercase tracking-[0.1em] text-muted mb-2">
             Album
           </span>
-          <h1 className="text-4xl md:text-5xl font-extrabold text-primary mb-3 tracking-tight balance-text">
+          <h1 className="text-2xl md:text-5xl font-extrabold text-primary mb-3 tracking-tight balance-text line-clamp-2">
             {album.collectionName}
           </h1>
-          <div className="flex items-center gap-2 text-sm text-primary/70 mb-4">
-            <span className="font-semibold text-primary">{album.artistName}</span>
+          <div className="flex items-center gap-2 text-sm text-primary/70 mb-4 whitespace-nowrap overflow-hidden">
+            <span className="font-semibold text-primary truncate max-w-[150px] md:max-w-none">{album.artistName}</span>
             <span>&middot;</span>
             <span>{year}</span>
             <span>&middot;</span>
             <span>{album.trackCount} songs</span>
           </div>
-          <button
-            onClick={handlePlayAlbum}
-            disabled={!firstPlayableTrack}
-            className={cn(
-              "flex items-center justify-center size-14 rounded-full bg-primary text-bg hover:scale-105 transition-all shadow-glow-sm cursor-pointer border-0 disabled:opacity-50 disabled:cursor-not-allowed",
-            )}
-          >
-            <PlayIcon width={24} height={24} className="ml-1" />
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handlePlayAlbum}
+              disabled={!firstPlayableTrack}
+              className={cn(
+                "flex items-center justify-center size-12 md:size-14 rounded-full bg-primary text-bg hover:scale-105 transition-all shadow-glow-sm cursor-pointer border-0 disabled:opacity-50 disabled:cursor-not-allowed",
+              )}
+            >
+              <PlayIcon width={24} height={24} className="ml-1" />
+            </button>
+            <button
+              onClick={handleShuffleAlbum}
+              disabled={!firstPlayableTrack}
+              className={cn(
+                "flex items-center justify-center size-10 md:size-12 rounded-full border border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed",
+              )}
+              title="Shuffle"
+            >
+              <ShuffleIcon width={20} height={20} />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -146,7 +171,7 @@ export function AlbumDetailView({ onBack }: AlbumDetailViewProps) {
               {i + 1}
             </span>
             <div className="flex-1">
-              <SongCard track={track} />
+              <SongCard track={track} context={tracks} contextIndex={i} />
             </div>
           </div>
         ))}

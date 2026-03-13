@@ -13,10 +13,12 @@ import {
   ArtistIcon,
   ChevronLeftIcon,
   DiscoverLogoIcon,
+  HeartFilledIcon,
   HomeIcon,
   LinkIcon,
   MusicNoteIcon,
   PlaylistIcon,
+  SparklesIcon,
   UsersIcon
 } from "components/icons"
 import { ThemeToggle } from "components/ThemeToggle/ThemeToggle"
@@ -84,6 +86,8 @@ export function Sidebar({
 
   const navItems: { label: string; view: ActiveView; icon: React.ReactNode }[] = [
     { label: "Home", view: "home", icon: <HomeIcon /> },
+    { label: "Suggested", view: "suggested", icon: <SparklesIcon width={20} height={20} /> },
+    { label: "Liked Songs", view: "liked-songs", icon: <HeartFilledIcon width={20} height={20} className="text-red-500" /> },
     { label: "Songs", view: "songs", icon: <MusicNoteIcon /> },
     ...(isPlaylistEnabled ? [{ label: "Playlists", view: "playlists" as ActiveView, icon: <PlaylistIcon /> }] : []),
     { label: "Albums", view: "albums", icon: <AlbumIcon /> },

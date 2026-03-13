@@ -8,7 +8,7 @@ import { useAuth } from "@clerk/nextjs"
 import { useFeatureFlagEnabled } from "posthog-js/react"
 
 import { CreatePlaylistModal } from "components/CreatePlaylistModal/CreatePlaylistModal"
-import { PlaylistIcon, SpinnerIcon } from "components/icons"
+import { PlusIcon, SpinnerIcon } from "components/icons"
 import { addTrack } from "lib/api/playlists"
 import { useRequireAuth } from "lib/hooks/useRequireAuth"
 import { usePlaylistStore } from "store/usePlaylistStore"
@@ -71,7 +71,7 @@ export function AddToPlaylistButton({ trackId }: AddToPlaylistButtonProps) {
         aria-label="Add to playlist"
         className="size-8 rounded-full border-0 bg-transparent flex items-center justify-center shrink-0 transition-colors text-muted hover:text-primary hover:bg-primary/10"
       >
-        <PlaylistIcon width={16} height={16} />
+        <PlusIcon width={16} height={16} strokeWidth={2.5} />
       </button>
 
       {isOpen && (

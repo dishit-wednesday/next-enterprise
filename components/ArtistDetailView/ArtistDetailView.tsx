@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import Image from "next/image"
 import { useSearchParams } from "next/navigation"
 
-import { ChevronLeftIcon, PlayIcon } from "components/icons"
+import { ChevronLeftIcon, PlayIcon, ShuffleIcon } from "components/icons"
 import { Skeleton } from "components/Skeleton/Skeleton"
 import { SongCard } from "components/SongCard/SongCard"
 
@@ -21,7 +21,7 @@ interface ArtistDetailViewProps {
 export function ArtistDetailView({ onBack }: ArtistDetailViewProps) {
   const searchParams = useSearchParams()
   const selectedArtistId = searchParams.get("id")
-  const { playTrack } = usePlayerStore()
+  const { playContext, isShuffled, toggleShuffle } = usePlayerStore()
   const { requireAuth } = useRequireAuth()
   
   const [artist, setArtist] = useState<ItunesArtist | null>(null)
@@ -89,8 +89,19 @@ export function ArtistDetailView({ onBack }: ArtistDetailViewProps) {
   function handlePlayArtist() {
     if (!firstPlayableTrack) return
     requireAuth(() => {
-      // For now, just play the first track. Ideally, this would queue the top tracks.
-      playTrack(firstPlayableTrack)
+      const startIndex = tracks.findIndex(t => t.trackId === firstPlayableTrack.trackId)
+      playContext(tracks, startIndex >= 0 ? startIndex : 0)
+    })
+  }
+
+  function handleShuffleArtist() {
+    if (!firstPlayableTrack) return
+    requireAuth(() => {
+      if (!isShuffled) {
+        toggleShuffle()
+      }
+      const startIndex = Math.floor(Math.random() * tracks.length)
+      playContext(tracks, startIndex)
     })
   }
 
@@ -106,40 +117,52 @@ export function ArtistDetailView({ onBack }: ArtistDetailViewProps) {
       </button>
 
       {/* Header */}
-      <header className="flex flex-col md:flex-row gap-6 md:items-end">
+      <header className="flex flex-col items-center md:items-end md:flex-row gap-6 text-center md:text-left">
         {artist.artworkUrl ? (
           <Image
             src={artist.artworkUrl}
             alt={artist.artistName}
             width={220}
             height={220}
-            className="rounded-full shadow-2xl shrink-0 object-cover"
+            className="rounded-full shadow-2xl shrink-0 object-cover w-32 h-32 md:w-[220px] md:h-[220px]"
             priority
           />
         ) : (
-          <div className="size-[220px] rounded-full bg-gradient-brand flex items-center justify-center shrink-0 shadow-2xl text-6xl font-bold text-bg">
+          <div className="size-32 md:size-[220px] rounded-full bg-gradient-brand flex items-center justify-center shrink-0 shadow-2xl text-4xl md:text-6xl font-bold text-bg">
             {initials}
           </div>
         )}
-        <div className="flex flex-col justify-end">
+        <div className="flex flex-col items-center md:items-start justify-end">
           <span className="text-xs font-bold uppercase tracking-[0.1em] text-muted mb-2">
             Artist
           </span>
-          <h1 className="text-5xl md:text-7xl font-extrabold text-primary mb-3 tracking-tight balance-text">
+          <h1 className="text-3xl md:text-7xl font-extrabold text-primary mb-3 tracking-tight balance-text line-clamp-2">
             {artist.artistName}
           </h1>
           <div className="flex items-center gap-2 text-sm text-primary/70 mb-4">
             <span>{artist.primaryGenreName}</span>
           </div>
-          <button
-            onClick={handlePlayArtist}
-            disabled={!firstPlayableTrack}
-            className={cn(
-              "flex items-center justify-center size-14 rounded-full bg-primary text-bg hover:scale-105 transition-all shadow-glow-sm cursor-pointer border-0 disabled:opacity-50 disabled:cursor-not-allowed",
-            )}
-          >
-            <PlayIcon width={24} height={24} className="ml-1" />
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handlePlayArtist}
+              disabled={!firstPlayableTrack}
+              className={cn(
+                "flex items-center justify-center size-12 md:size-14 rounded-full bg-primary text-bg hover:scale-105 transition-all shadow-glow-sm cursor-pointer border-0 disabled:opacity-50 disabled:cursor-not-allowed",
+              )}
+            >
+              <PlayIcon width={24} height={24} className="ml-1" />
+            </button>
+            <button
+              onClick={handleShuffleArtist}
+              disabled={!firstPlayableTrack}
+              className={cn(
+                "flex items-center justify-center size-10 md:size-12 rounded-full border border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed",
+              )}
+              title="Shuffle"
+            >
+              <ShuffleIcon width={20} height={20} />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -152,7 +175,7 @@ export function ArtistDetailView({ onBack }: ArtistDetailViewProps) {
               {i + 1}
             </span>
             <div className="flex-1">
-              <SongCard track={track} />
+              <SongCard track={track} context={tracks} contextIndex={i} />
             </div>
           </div>
         ))}

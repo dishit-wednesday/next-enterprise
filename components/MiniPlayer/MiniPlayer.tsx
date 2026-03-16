@@ -7,7 +7,6 @@ import { useEffect, useRef, useState } from "react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 
-import { AddToPlaylistButton } from "components/AddToPlaylistButton/AddToPlaylistButton"
 import {
   ChevronDownIcon,
   ChevronUpIcon,
@@ -15,17 +14,26 @@ import {
   PauseIcon,
   PlayIcon,
   RepeatIcon,
+  ShuffleIcon,
   SkipBackIcon,
   SkipForwardIcon,
   VolumeIcon,
 } from "components/icons"
+import { LikeButton } from "components/LikeButton/LikeButton"
+import { ScrollingText } from "components/ScrollingText/ScrollingText"
+import { TrackContextMenu } from "components/TrackContextMenu/TrackContextMenu"
 import { cn } from "lib/cn"
+import { searchSongs } from "lib/itunes/api"
+import type { ItunesTrack } from "lib/itunes/types"
 import { formatDuration } from "lib/itunes/utils"
 import { useAppStore } from "store/useAppStore"
 import { usePlayerStore } from "store/usePlayerStore"
 
 export function MiniPlayer() {
-  const { currentTrack, isPlaying, togglePlay, volume, setVolume } = usePlayerStore()
+  const { 
+    currentTrack, isPlaying, togglePlay, volume, setVolume, 
+    playNext, playPrevious, isShuffled, toggleShuffle, isRepeat, toggleRepeat 
+  } = usePlayerStore()
   const { isSidebarCollapsed, isFullPagePlayerOpen, setFullPagePlayerOpen } = useAppStore()
   const router = useRouter()
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -33,7 +41,6 @@ export function MiniPlayer() {
   const [progress, setProgress] = useState(0)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
-  const [isRepeat, setIsRepeat] = useState(false)
   const [isDragging] = useState(false)
 
   // Pop-out mini player state
@@ -49,23 +56,40 @@ export function MiniPlayer() {
   // Load and play new track when currentTrack changes
   useEffect(() => {
     if (!currentTrack?.previewUrl) return
-
-    if (!audioRef.current) {
-      audioRef.current = new Audio()
+    
+    // Always create a new audio element to guarantee a clean slate and avoid Safari/Chrome media race conditions
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.src = ""
     }
+    
+    const audio = new Audio()
+    // Important: crossOrigin allows properly tracking media events sometimes blocked otherwise
+    audio.crossOrigin = "anonymous" 
+    audioRef.current = audio
 
-    audioRef.current.src = currentTrack.previewUrl
-    audioRef.current.play().catch(() => { })
+    audio.src = currentTrack.previewUrl
+    audio.volume = volume
+
+    // Playback starting logic
+    audio.play().catch((e) => {
+      console.error("[MiniPlayer] Autoplay failed:", e)
+    })
+    
     setProgress(0)
     setCurrentTime(0)
+    
   }, [currentTrack?.previewUrl])
 
   // Sync play/pause
   useEffect(() => {
     const audio = audioRef.current
     if (!audio) return
-    if (isPlaying) audio.play().catch(() => { })
-    else audio.pause()
+    if (isPlaying) {
+      audio.play().catch(() => { })
+    } else {
+      audio.pause()
+    }
   }, [isPlaying])
 
   // Sync volume
@@ -73,23 +97,94 @@ export function MiniPlayer() {
     if (audioRef.current) audioRef.current.volume = volume
   }, [volume])
 
-  // Sync repeat (re-attach ended listener whenever isRepeat changes)
+  // Attach ended listener (separating from currentTrack changes so it stays stable)
   useEffect(() => {
     const audio = audioRef.current
     if (!audio) return
-    const onEnded = () => {
+    
+    const onEnded = async () => {
+      const store = usePlayerStore.getState()
+      
       if (isRepeat) {
         audio.currentTime = 0
         audio.play().catch(() => { })
       } else {
-        usePlayerStore.getState().stop()
-        setProgress(0)
-        setCurrentTime(0)
+        // Check if there's anything upcoming in either queue
+        if (store.queue.length > 0 || store.contextQueue.length > 0) {
+          store.playNext()
+        } else if (store.currentTrack) {
+          // Fallback handled in discovery useEffect primarily, 
+          // but we keep this as a safety net.
+          store.stop()
+        } else {
+          store.stop()
+        }
       }
     }
+    
     audio.addEventListener("ended", onEnded)
     return () => audio.removeEventListener("ended", onEnded)
-  }, [isRepeat])
+  }, [isRepeat, currentTrack])
+
+  // ─────── DISCOVERY / AI AUTOPLAY ───────
+  const { playbackContext } = usePlayerStore()
+  const [isFetchingDiscovery, setIsFetchingDiscovery] = useState(false)
+
+  useEffect(() => {
+    const store = usePlayerStore.getState()
+    if (!currentTrack || playbackContext !== "search") return
+    
+    // Only fetch if queue is actually empty (discovery mode)
+    if (store.queue.length > 0 || store.contextQueue.length > 0) return
+    if (isFetchingDiscovery) return
+
+    async function triggerDiscovery() {
+      if (!currentTrack) return
+      setIsFetchingDiscovery(true)
+      console.info(`[Discovery] Triggering for: ${currentTrack.trackName} (${currentTrack.primaryGenreName})`)
+
+      try {
+        const res = await fetch("/api/ai/autoplay", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ genre: currentTrack.primaryGenreName || "Music" })
+        })
+
+        if (!res.ok) throw new Error("Discovery API failed")
+        const { suggestions } = await res.json() as { suggestions: string[] }
+        console.info(`[Discovery] Received AI Suggestions:`, suggestions)
+
+        // Fetch top songs for these suggestions
+        console.info(`[Discovery] Searching iTunes for related tracks...`)
+        const tracksResults = await Promise.allSettled(
+          suggestions.slice(0, 3).map(s => {
+            console.info(`[Discovery] -> Fetching for suggestion: "${s}"`)
+            return searchSongs(s)
+          })
+        )
+
+        const discoveryTracks: ItunesTrack[] = []
+        for (const r of tracksResults) {
+          if (r.status === "fulfilled") {
+            // Take 2 tracks per suggestion
+            discoveryTracks.push(...r.value.slice(0, 2))
+          }
+        }
+
+        if (discoveryTracks.length > 0) {
+          console.info(`[Discovery] Injected ${discoveryTracks.length} tracks into queue`)
+          // Update store's contextQueue directly
+          usePlayerStore.setState({ contextQueue: discoveryTracks })
+        }
+      } catch (err) {
+        console.error("[Discovery] Failed:", err)
+      } finally {
+        setIsFetchingDiscovery(false)
+      }
+    }
+
+    triggerDiscovery()
+  }, [currentTrack?.trackId, playbackContext])
 
   // Butter-smooth progress updates via rAF
   useEffect(() => {
@@ -114,6 +209,48 @@ export function MiniPlayer() {
     return () => { audioRef.current?.pause() }
   }, [])
 
+  // ─────── KEYBOARD SHORTCUTS ───────
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if user is typing in an input, textarea, etc.
+      if (
+        document.activeElement?.tagName === "INPUT" ||
+        document.activeElement?.tagName === "TEXTAREA" ||
+        (document.activeElement as HTMLElement)?.isContentEditable
+      ) {
+        return
+      }
+
+      switch (e.code) {
+        case "Space":
+          e.preventDefault()
+          togglePlay()
+          break
+        case "ArrowRight":
+          if (e.metaKey || e.ctrlKey) {
+            e.preventDefault()
+            handleNextTrack()
+          }
+          break
+        case "ArrowLeft":
+          if (e.metaKey || e.ctrlKey) {
+            e.preventDefault()
+            handlePrevTrack()
+          }
+          break
+        case "KeyM":
+          e.preventDefault()
+          setVolume(volume === 0 ? 0.5 : 0)
+          break
+        default:
+          break
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [togglePlay, handleNextTrack, handlePrevTrack, volume, setVolume])
+
   if (!currentTrack) return null
 
   const artworkUrl = currentTrack.artworkUrl100.replace("100x100", "300x300")
@@ -136,14 +273,17 @@ export function MiniPlayer() {
     seekTo(getRatioFromMouseEvent(e))
   }
 
-  function handleSkipBack() {
-    if (audioRef.current)
-      audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 5)
+  function handlePrevTrack() {
+    const audio = audioRef.current
+    if (audio && audio.currentTime > 3) {
+      audio.currentTime = 0
+    } else {
+      playPrevious()
+    }
   }
 
-  function handleSkipForward() {
-    if (audioRef.current)
-      audioRef.current.currentTime = Math.min(audioRef.current.duration, audioRef.current.currentTime + 5)
+  function handleNextTrack() {
+    playNext()
   }
 
   function handleVolumeChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -205,7 +345,10 @@ export function MiniPlayer() {
           <ChevronDownIcon width={22} height={22} />
         </button>
         <span className="text-white/60 text-sm font-medium tracking-widest uppercase">Now Playing</span>
-        <AddToPlaylistButton trackId={currentTrack.trackId} />
+        <div className="flex items-center gap-2">
+          <LikeButton trackId={currentTrack.trackId} size={22} className="text-white/60 hover:text-white" />
+          <TrackContextMenu track={currentTrack} variant="dark" />
+        </div>
       </div>
 
       {/* Main content */}
@@ -260,7 +403,18 @@ export function MiniPlayer() {
         {/* Controls */}
         <div className="w-full flex items-center justify-between">
           <button
-            onClick={() => setIsRepeat(!isRepeat)}
+            onClick={toggleShuffle}
+            className={cn(
+              "size-10 flex items-center justify-center rounded-full transition-colors",
+              isShuffled ? "text-white bg-white/20" : "text-white/40 hover:text-white"
+            )}
+            title="Shuffle"
+          >
+            <ShuffleIcon width={22} height={22} />
+          </button>
+
+          <button
+            onClick={toggleRepeat}
             className={cn(
               "size-10 flex items-center justify-center rounded-full transition-colors",
               isRepeat ? "text-white bg-white/20" : "text-white/40 hover:text-white"
@@ -271,9 +425,9 @@ export function MiniPlayer() {
           </button>
 
           <button
-            onClick={handleSkipBack}
+            onClick={handlePrevTrack}
             className="size-12 flex items-center justify-center rounded-full text-white hover:bg-white/10 transition-colors"
-            title="-5s"
+            title="Previous track"
           >
             <SkipBackIcon width={28} height={28} />
           </button>
@@ -289,9 +443,9 @@ export function MiniPlayer() {
           </button>
 
           <button
-            onClick={handleSkipForward}
+            onClick={handleNextTrack}
             className="size-12 flex items-center justify-center rounded-full text-white hover:bg-white/10 transition-colors"
-            title="+5s"
+            title="Next track"
           >
             <SkipForwardIcon width={28} height={28} />
           </button>
@@ -361,7 +515,7 @@ export function MiniPlayer() {
       </div>
 
       <div className="flex items-center justify-between px-3 pb-3 gap-1">
-        <button onClick={handleSkipBack} className="size-8 flex items-center justify-center rounded-full text-muted hover:text-primary transition-colors">
+        <button onClick={handlePrevTrack} className="size-8 flex items-center justify-center rounded-full text-muted hover:text-primary transition-colors">
           <SkipBackIcon width={16} height={16} />
         </button>
         <button
@@ -370,7 +524,7 @@ export function MiniPlayer() {
         >
           {isPlaying ? <PauseIcon width={14} height={14} /> : <PlayIcon width={14} height={14} className="ml-0.5" />}
         </button>
-        <button onClick={handleSkipForward} className="size-8 flex items-center justify-center rounded-full text-muted hover:text-primary transition-colors">
+        <button onClick={handleNextTrack} className="size-8 flex items-center justify-center rounded-full text-muted hover:text-primary transition-colors">
           <SkipForwardIcon width={16} height={16} />
         </button>
         <div className="flex items-center gap-1 flex-1 ml-1">
@@ -382,7 +536,7 @@ export function MiniPlayer() {
             step="0.01"
             value={volume}
             onChange={handleVolumeChange}
-            className="w-full h-1 bg-gray-300 dark:bg-white/30 accent-black dark:accent-white cursor-pointer rounded-full"
+            className="w-full h-1 bg-surface-elevated accent-primary cursor-pointer rounded-full"
           />
         </div>
       </div>
@@ -422,9 +576,11 @@ export function MiniPlayer() {
                 className="w-full h-full object-cover"
               />
             </div>
-            <div className="flex flex-col min-w-0">
-              <span className="text-xs md:text-sm font-semibold text-primary truncate flex items-center gap-1.5">
-                {currentTrack.trackName}
+            <div className="flex flex-col min-w-0 flex-1 overflow-hidden">
+              <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
+                <div className="text-xs md:text-sm font-semibold text-primary min-w-0 flex-1 overflow-hidden">
+                  <ScrollingText text={currentTrack.trackName} />
+                </div>
                 {isPlaying && (
                   <span className="flex items-end gap-[1.5px] h-3 shrink-0">
                     <span className="w-[2px] bg-primary animate-eq-bar-1 rounded-full" />
@@ -432,7 +588,7 @@ export function MiniPlayer() {
                     <span className="w-[2px] bg-primary animate-eq-bar-3 rounded-full" />
                   </span>
                 )}
-              </span>
+              </div>
               <button
                 className="text-[11px] text-muted truncate text-left hover:text-primary transition-colors"
                 onClick={() => router.push(`/?view=artist_detail&id=${currentTrack.artistId}`, { scroll: false })}
@@ -440,15 +596,16 @@ export function MiniPlayer() {
                 {currentTrack.artistName}
               </button>
             </div>
+            <LikeButton trackId={currentTrack.trackId} size={18} className="ml-1 hidden md:block" />
           </div>
 
           {/* Center — transport & progress (hidden on mobile) */}
           <div className="hidden md:flex flex-col items-center justify-center gap-1.5 flex-1 max-w-[40%]">
             <div className="flex items-center gap-4">
-              {/* -5s */}
+              {/* Previous */}
               <button
-                onClick={handleSkipBack}
-                title="-5s"
+                onClick={handlePrevTrack}
+                title="Previous track"
                 className="size-8 flex items-center justify-center rounded-full text-muted hover:text-primary hover:bg-surface-elevated transition-colors"
               >
                 <SkipBackIcon width={18} height={18} />
@@ -466,18 +623,30 @@ export function MiniPlayer() {
                 }
               </button>
 
-              {/* +5s */}
+              {/* Next */}
               <button
-                onClick={handleSkipForward}
-                title="+5s"
+                onClick={handleNextTrack}
+                title="Next track"
                 className="size-8 flex items-center justify-center rounded-full text-muted hover:text-primary hover:bg-surface-elevated transition-colors"
               >
                 <SkipForwardIcon width={18} height={18} />
               </button>
 
+              {/* Shuffle */}
+              <button
+                onClick={toggleShuffle}
+                title={isShuffled ? "Shuffle: On" : "Shuffle: Off"}
+                className={cn(
+                  "size-8 flex items-center justify-center rounded-full transition-colors",
+                  isShuffled ? "text-primary bg-primary/10" : "text-muted hover:text-primary hover:bg-surface-elevated"
+                )}
+              >
+                <ShuffleIcon width={16} height={16} />
+              </button>
+
               {/* Repeat */}
               <button
-                onClick={() => setIsRepeat(!isRepeat)}
+                onClick={toggleRepeat}
                 title={isRepeat ? "Repeat: On" : "Repeat: Off"}
                 className={cn(
                   "size-8 flex items-center justify-center rounded-full transition-colors",
@@ -518,8 +687,8 @@ export function MiniPlayer() {
 
           {/* Right — volume + utilities */}
           <div className="hidden md:flex items-center gap-2 md:w-[28%] justify-end">
-            {/* Add to Playlist — uses the existing component, portal-rendered dropdown */}
-            <AddToPlaylistButton trackId={currentTrack.trackId} />
+            {/* 3-dot context menu */}
+            <TrackContextMenu track={currentTrack} />
 
             {/* Volume */}
             <div className="flex items-center gap-1.5 w-24 group">
@@ -528,7 +697,7 @@ export function MiniPlayer() {
                 type="range" min="0" max="1" step="0.01"
                 value={volume}
                 onChange={handleVolumeChange}
-                className="w-full h-1 accent-black dark:accent-white cursor-pointer rounded-full"
+                className="w-full h-1 accent-primary cursor-pointer rounded-full opacity-80 hover:opacity-100 transition-opacity"
               />
             </div>
 

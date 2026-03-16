@@ -69,13 +69,13 @@ export function HomeContent({ activeView, onNavClick }: HomeContentProps) {
   if (activeView === "songs" && trendingSongs.length > 0) {
     return (
       <section className="animate-in fade-in duration-500 pb-24">
-        <h2 className="text-3xl md:text-4xl font-semibold text-primary tracking-tight mb-8">Trending Songs</h2>
-        <div className="flex flex-col gap-1 w-full max-w-5xl">
+        <h2 className="text-2xl md:text-4xl font-semibold text-primary tracking-tight mb-6">Trending Songs</h2>
+        <div className="flex flex-col gap-0.5 w-full max-w-5xl">
           {trendingSongs.map((track, index) => (
-            <div key={track.trackId} className="flex items-center gap-2">
-              <span className="w-5 text-xs text-muted text-right shrink-0">{index + 1}</span>
-              <div className="flex-1">
-                <SongCard track={track} />
+            <div key={track.trackId} className="flex items-center gap-1 md:gap-3">
+              <span className="w-4 md:w-5 text-xs text-muted text-right shrink-0">{index + 1}</span>
+              <div className="flex-1 min-w-0">
+                <SongCard track={track} context={trendingSongs} contextIndex={index} />
               </div>
             </div>
           ))}
@@ -101,7 +101,7 @@ export function HomeContent({ activeView, onNavClick }: HomeContentProps) {
     return (
       <section className="animate-in fade-in duration-500 pb-24">
         <h2 className="text-3xl md:text-4xl font-semibold text-primary tracking-tight mb-8">Popular Artists</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6">
           {popularArtists.map((artist) => (
             <ArtistTile key={artist.artistId} artist={artist} onNavClick={onNavClick} />
           ))}
@@ -117,7 +117,7 @@ export function HomeContent({ activeView, onNavClick }: HomeContentProps) {
       <section className="animate-in fade-in duration-500 pb-24">
         <h2 className="text-3xl md:text-4xl font-semibold text-primary tracking-tight mb-8">Top Podcasts</h2>
         {topPodcasts.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-6">
             {topPodcasts.map(podcast => (
               <AlbumTile
                 key={podcast.collectionId}
@@ -127,7 +127,7 @@ export function HomeContent({ activeView, onNavClick }: HomeContentProps) {
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-6">
             {Array.from({ length: 10 }).map((_, i) => (
                <div key={i} className="flex flex-col gap-3">
                  <Skeleton className="aspect-square rounded-[1.25rem]" />
@@ -180,12 +180,12 @@ export function HomeContent({ activeView, onNavClick }: HomeContentProps) {
             <h2 className="text-3xl md:text-4xl font-semibold text-primary tracking-tight">Trending Songs</h2>
             <button onClick={() => onNavClick("songs")} className="text-xs font-bold text-muted hover:text-primary transition-colors   tracking-widest hidden sm:block">See All</button>
           </div>
-          <div className="flex flex-col gap-1 w-full max-w-5xl">
+          <div className="flex flex-col gap-0.5 w-full max-w-5xl">
             {restSongs.map((track, idx) => (
-              <div key={track.trackId} className="flex items-center gap-4 w-full group">
-                <span className="w-5 text-sm font-bold text-muted text-right group-hover:text-primary transition-colors">{idx + 1}</span>
+              <div key={track.trackId} className="flex items-center gap-1 md:gap-4 w-full group">
+                <span className="w-4 md:w-5 text-sm font-bold text-muted text-right group-hover:text-primary transition-colors shrink-0">{idx + 1}</span>
                 <div className="flex-1 min-w-0">
-                  <SongCard track={track} />
+                  <SongCard track={track} context={restSongs} contextIndex={idx} />
                 </div>
               </div>
             ))}
@@ -193,7 +193,7 @@ export function HomeContent({ activeView, onNavClick }: HomeContentProps) {
         </section>
       )}
 
-      {/* Popular Artists */}
+
       {(filter === "all" || filter === "music") && (
         <section className="mb-16">
           <div className="flex items-end justify-between mb-6">
@@ -263,10 +263,10 @@ export function HomeContent({ activeView, onNavClick }: HomeContentProps) {
             <h2 className="text-3xl md:text-4xl font-semibold text-primary tracking-tight">Discover Something New</h2>
             <button onClick={() => onNavClick("songs")} className="text-xs font-bold text-muted hover:text-primary transition-colors tracking-widest hidden sm:block">See All</button>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-6">
-            {discoverSongs.map((track) => (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-6">
+            {discoverSongs.map((track, idx) => (
               <div key={track.trackId}>
-                <TrackTile track={track} />
+                <TrackTile track={track} context={discoverSongs} contextIndex={idx} />
               </div>
             ))}
           </div>
@@ -278,12 +278,24 @@ export function HomeContent({ activeView, onNavClick }: HomeContentProps) {
             <h2 className="text-3xl md:text-4xl font-semibold text-primary tracking-tight">Top Podcasts</h2>
             <button onClick={() => onNavClick("podcasts")} className="text-xs font-bold text-muted hover:text-primary transition-colors uppercase tracking-widest hidden sm:block">See All</button>
           </div>
-          <div className="flex overflow-x-auto pb-6 -mx-6 px-6 gap-6 snap-x snap-mandatory [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          {/* Mobile: List view */}
+          <div className="flex flex-col gap-3 md:hidden">
             {topPodcasts.map(podcast => (
-              <div key={podcast.collectionId} className="w-[140px] md:w-[160px] shrink-0 snap-center">
+              <AlbumTile
+                key={podcast.collectionId}
+                album={podcast}
+                variant="list"
+                onNavClick={() => onNavClick("podcast_detail", String(podcast.collectionId))}
+              />
+            ))}
+          </div>
+
+          {/* Desktop: Horizontal scroll */}
+          <div className="hidden md:flex overflow-x-auto pb-6 -mx-6 px-6 gap-6 snap-x snap-mandatory [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+            {topPodcasts.map(podcast => (
+              <div key={podcast.collectionId} className="w-[160px] shrink-0 snap-center">
                 <AlbumTile
                   album={podcast}
-
                   onNavClick={() => onNavClick("podcast_detail", String(podcast.collectionId))}
                 />
               </div>
@@ -295,12 +307,30 @@ export function HomeContent({ activeView, onNavClick }: HomeContentProps) {
   )
 }
 
-function AlbumTile({ album, onNavClick }: { album: ItunesAlbum; onNavClick?: (view: ActiveView, id?: string) => void }) {
+function AlbumTile({ album, onNavClick, variant = "grid" }: { album: ItunesAlbum; onNavClick?: (view: ActiveView, id?: string) => void, variant?: "grid" | "list" }) {
   const artworkUrl = album.artworkUrl100.replace("100x100", "300x300")
-  const year = extractReleaseYear(album.releaseDate)
 
   function handleClick() {
-    if (onNavClick) onNavClick("album_detail", String(album.collectionId))
+    if (onNavClick) onNavClick("podcast_detail" in album || album.primaryGenreName === "Podcasts" ? "podcast_detail" : "album_detail", String(album.collectionId))
+  }
+
+  if (variant === "list") {
+    return (
+      <div
+        onClick={handleClick}
+        className="group/album flex items-center gap-4 p-2 rounded-xl transition-all duration-300 cursor-pointer hover:bg-surface-elevated"
+      >
+        <div className="relative size-16 md:size-20 rounded-xl overflow-hidden shadow-sm shrink-0">
+          <Image src={artworkUrl} alt={album.collectionName} fill className="object-cover" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-primary truncate m-0 group-hover/album:text-green-500 transition-colors uppercase tracking-tight">
+            {album.collectionName}
+          </p>
+          <p className="text-xs text-muted mt-1 m-0 truncate font-medium">{album.artistName}</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -317,12 +347,10 @@ function AlbumTile({ album, onNavClick }: { album: ItunesAlbum; onNavClick?: (vi
           fill
           className="object-cover transition-transform duration-500 group-hover/album:scale-[1.05]"
         />
-        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/album:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-        </div>
       </div>
-      <div>
-        <p className="text-sm font-bold text-primary truncate m-0 group-hover/album:text-green-500 transition-colors">{album.collectionName}</p>
-        <p className="text-xs text-muted mt-0.5 m-0 truncate font-medium">{album.artistName} &middot; {year}</p>
+      <div className="mt-2 md:mt-3 px-1">
+        <p className="text-[13px] md:text-sm font-bold text-primary truncate m-0 group-hover/album:text-green-500 transition-colors uppercase tracking-tight">{album.collectionName}</p>
+        <p className="text-[11px] md:text-xs text-muted mt-0.5 m-0 truncate font-medium">{album.artistName}</p>
       </div>
     </div>
   )
@@ -359,16 +387,16 @@ function ArtistTile({ artist, onNavClick }: { artist: ItunesArtist, onNavClick?:
           </div>
         )}
       </div>
-      <p className="text-sm font-bold text-primary truncate w-full text-center m-0 group-hover:text-green-500 transition-colors">{artist.artistName}</p>
-      <p className="text-xs text-muted mt-1 m-0 uppercase tracking-widest font-semibold">
+      <p className="text-[13px] md:text-sm font-bold text-primary truncate w-full text-center m-0 group-hover:text-green-500 transition-colors px-1">{artist.artistName}</p>
+      <p className="text-[10px] md:text-xs text-muted mt-0.5 md:mt-1 m-0 uppercase tracking-widest font-semibold opacity-60">
         Artist
       </p>
     </div>
   )
 }
 
-function TrackTile({ track }: { track: ItunesTrack }) {
-  const { currentTrack, isPlaying, playTrack, togglePlay } = usePlayerStore()
+function TrackTile({ track, context, contextIndex }: { track: ItunesTrack; context?: ItunesTrack[]; contextIndex?: number }) {
+  const { currentTrack, isPlaying, playTrack, playContext, togglePlay } = usePlayerStore()
   const { requireAuth } = useRequireAuth()
   const artworkUrl = track.artworkUrl100.replace("100x100", "300x300")
   const isCurrentTrack = currentTrack?.trackId === track.trackId
@@ -381,7 +409,11 @@ function TrackTile({ track }: { track: ItunesTrack }) {
       if (isCurrentTrack) {
         togglePlay()
       } else {
-        playTrack(track)
+        if (context && contextIndex !== undefined) {
+          playContext(context, contextIndex)
+        } else {
+          playTrack(track)
+        }
       }
     })
   }

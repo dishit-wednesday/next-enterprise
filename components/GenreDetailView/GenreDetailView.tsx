@@ -83,7 +83,7 @@ export function GenreDetailView({ genreName, onBack }: GenreDetailViewProps) {
             <div key={track.trackId} className="flex items-center gap-4 w-full group">
               <span className="w-8 text-sm font-bold text-muted text-right group-hover:text-primary transition-colors tabular-nums">{idx + 1}</span>
               <div className="flex-1 min-w-0">
-                <SongCard track={track} />
+                <SongCard track={track} context={songs} contextIndex={idx} />
               </div>
             </div>
           ))}

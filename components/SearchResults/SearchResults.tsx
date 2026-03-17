@@ -43,7 +43,7 @@ export function SearchResults({ songs, albums, artists, isLoading, hasSearched, 
                 className="animate-fade-in-up"
                 style={{ animationDelay: `${i * 30}ms` }}
               >
-                <SongCard track={track} />
+                <SongCard track={track} playbackContext="search" />
               </div>
             ))}
           </div>
@@ -52,7 +52,7 @@ export function SearchResults({ songs, albums, artists, isLoading, hasSearched, 
 
       {albums.length > 0 && (
         <Section title="Albums" count={albums.length}>
-          <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(160px,1fr))]">
+          <div className="grid gap-3 md:gap-4 [grid-template-columns:repeat(auto-fill,minmax(140px,1fr))]">
             {albums.map((album, i) => (
               <div
                 key={album.collectionId}
@@ -118,7 +118,7 @@ function SearchSkeletons() {
       </section>
       <section className="mb-10">
         <Skeleton className="w-20 h-6 mb-4" />
-        <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(160px,1fr))]">
+        <div className="grid gap-3 md:gap-4 [grid-template-columns:repeat(auto-fill,minmax(140px,1fr))]">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-[210px] rounded-3xl" />
           ))}

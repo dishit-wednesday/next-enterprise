@@ -20,7 +20,7 @@ interface PodcastDetailViewProps {
 }
 
 export function PodcastDetailView({ podcastId, onBack }: PodcastDetailViewProps) {
-  const { playTrack } = usePlayerStore()
+  const { playContext } = usePlayerStore()
   const { requireAuth } = useRequireAuth()
   
   const [podcast, setPodcast] = useState<ItunesAlbum | null>(null)
@@ -83,7 +83,8 @@ export function PodcastDetailView({ podcastId, onBack }: PodcastDetailViewProps)
   function handlePlayLatest() {
     if (!firstPlayableEpisode) return
     requireAuth(() => {
-      playTrack(firstPlayableEpisode)
+      const startIndex = episodes.findIndex(e => e.trackId === firstPlayableEpisode.trackId)
+      playContext(episodes, startIndex >= 0 ? startIndex : 0)
     })
   }
 
@@ -138,9 +139,9 @@ export function PodcastDetailView({ podcastId, onBack }: PodcastDetailViewProps)
       {/* Episodes List - using slightly larger cards for podcasts */}
       <section className="flex flex-col gap-3 mt-4">
         <h3 className="text-2xl font-bold mb-4">All Episodes</h3>
-        {episodes.map((episode) => (
+        {episodes.map((episode, i) => (
           <div key={episode.trackId} className="bg-surface/50 hover:bg-surface border border-transparent hover:border-border rounded-xl p-2 transition-all">
-            <SongCard track={episode} />
+            <SongCard track={episode} context={episodes} contextIndex={i} />
           </div>
         ))}
       </section>

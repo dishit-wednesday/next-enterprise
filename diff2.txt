@@ -1,0 +1,1859 @@
+diff --git a/components/AddToPlaylistButton/AddToPlaylistButton.tsx b/components/AddToPlaylistButton/AddToPlaylistButton.tsx
+index f75e6d7..16da47b 100644
+--- a/components/AddToPlaylistButton/AddToPlaylistButton.tsx
++++ b/components/AddToPlaylistButton/AddToPlaylistButton.tsx
+@@ -8,7 +8,7 @@ import { useAuth } from "@clerk/nextjs"
+ import { useFeatureFlagEnabled } from "posthog-js/react"
+ 
+ import { CreatePlaylistModal } from "components/CreatePlaylistModal/CreatePlaylistModal"
+-import { PlaylistIcon, SpinnerIcon } from "components/icons"
++import { PlusIcon, SpinnerIcon } from "components/icons"
+ import { addTrack } from "lib/api/playlists"
+ import { useRequireAuth } from "lib/hooks/useRequireAuth"
+ import { usePlaylistStore } from "store/usePlaylistStore"
+@@ -71,7 +71,7 @@ export function AddToPlaylistButton({ trackId }: AddToPlaylistButtonProps) {
+         aria-label="Add to playlist"
+         className="size-8 rounded-full border-0 bg-transparent flex items-center justify-center shrink-0 transition-colors text-muted hover:text-primary hover:bg-primary/10"
+       >
+-        <PlaylistIcon width={16} height={16} />
++        <PlusIcon width={16} height={16} strokeWidth={2.5} />
+       </button>
+ 
+       {isOpen && (
+diff --git a/components/AlbumDetailView/AlbumDetailView.tsx b/components/AlbumDetailView/AlbumDetailView.tsx
+index a832c6e..dc29a74 100644
+--- a/components/AlbumDetailView/AlbumDetailView.tsx
++++ b/components/AlbumDetailView/AlbumDetailView.tsx
+@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
+ import Image from "next/image"
+ import { useSearchParams } from "next/navigation"
+ 
+-import { ChevronLeftIcon, PlayIcon } from "components/icons"
++import { ChevronLeftIcon, PlayIcon, ShuffleIcon } from "components/icons"
+ import { Skeleton } from "components/Skeleton/Skeleton"
+ import { SongCard } from "components/SongCard/SongCard"
+ 
+@@ -22,7 +22,7 @@ interface AlbumDetailViewProps {
+ export function AlbumDetailView({ onBack }: AlbumDetailViewProps) {
+   const searchParams = useSearchParams()
+   const selectedAlbumId = searchParams.get("id")
+-  const { playTrack } = usePlayerStore()
++  const { playContext, isShuffled, toggleShuffle } = usePlayerStore()
+   const { requireAuth } = useRequireAuth()
+   
+   const [album, setAlbum] = useState<ItunesAlbum | null>(null)
+@@ -86,8 +86,21 @@ export function AlbumDetailView({ onBack }: AlbumDetailViewProps) {
+   function handlePlayAlbum() {
+     if (!firstPlayableTrack) return
+     requireAuth(() => {
+-      // For now, just play the first track. Ideally, this would queue the album.
+-      playTrack(firstPlayableTrack)
++      const startIndex = tracks.findIndex(t => t.trackId === firstPlayableTrack.trackId)
++      playContext(tracks, startIndex >= 0 ? startIndex : 0)
++    })
++  }
++
++  function handleShuffleAlbum() {
++    if (!firstPlayableTrack) return
++    requireAuth(() => {
++      // If shuffle is not on, turn it on
++      if (!isShuffled) {
++        toggleShuffle()
++      }
++      // Start playing
++      const startIndex = Math.floor(Math.random() * tracks.length)
++      playContext(tracks, startIndex)
+     })
+   }
+ 
+@@ -103,50 +116,62 @@ export function AlbumDetailView({ onBack }: AlbumDetailViewProps) {
+       </button>
+ 
+       {/* Header */}
+-      <header className="flex flex-col md:flex-row gap-6 md:items-end">
++      <header className="flex flex-col items-center md:items-end md:flex-row gap-6 text-center md:text-left">
+         <Image
+           src={artworkUrl}
+           alt={album.collectionName}
+           width={220}
+           height={220}
+-          className="rounded-xl shadow-2xl shrink-0"
++          className="rounded-xl shadow-2xl shrink-0 w-32 h-32 md:w-[220px] md:h-[220px] object-cover"
+           priority
+         />
+-        <div className="flex flex-col justify-end">
++        <div className="flex flex-col items-center md:items-start justify-end">
+           <span className="text-xs font-bold uppercase tracking-[0.1em] text-muted mb-2">
+             Album
+           </span>
+-          <h1 className="text-4xl md:text-5xl font-extrabold text-primary mb-3 tracking-tight balance-text">
++          <h1 className="text-2xl md:text-5xl font-extrabold text-primary mb-3 tracking-tight balance-text line-clamp-2">
+             {album.collectionName}
+           </h1>
+-          <div className="flex items-center gap-2 text-sm text-primary/70 mb-4">
+-            <span className="font-semibold text-primary">{album.artistName}</span>
++          <div className="flex items-center gap-2 text-sm text-primary/70 mb-4 whitespace-nowrap overflow-hidden">
++            <span className="font-semibold text-primary truncate max-w-[150px] md:max-w-none">{album.artistName}</span>
+             <span>&middot;</span>
+             <span>{year}</span>
+             <span>&middot;</span>
+             <span>{album.trackCount} songs</span>
+           </div>
+-          <button
+-            onClick={handlePlayAlbum}
+-            disabled={!firstPlayableTrack}
+-            className={cn(
+-              "flex items-center justify-center size-14 rounded-full bg-primary text-bg hover:scale-105 transition-all shadow-glow-sm cursor-pointer border-0 disabled:opacity-50 disabled:cursor-not-allowed",
+-            )}
+-          >
+-            <PlayIcon width={24} height={24} className="ml-1" />
+-          </button>
++          <div className="flex items-center gap-3">
++            <button
++              onClick={handlePlayAlbum}
++              disabled={!firstPlayableTrack}
++              className={cn(
++                "flex items-center justify-center size-12 md:size-14 rounded-full bg-primary text-bg hover:scale-105 transition-all shadow-glow-sm cursor-pointer border-0 disabled:opacity-50 disabled:cursor-not-allowed",
++              )}
++            >
++              <PlayIcon width={24} height={24} className="ml-1" />
++            </button>
++            <button
++              onClick={handleShuffleAlbum}
++              disabled={!firstPlayableTrack}
++              className={cn(
++                "flex items-center justify-center size-10 md:size-12 rounded-full border border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed",
++              )}
++              title="Shuffle"
++            >
++              <ShuffleIcon width={20} height={20} />
++            </button>
++          </div>
+         </div>
+       </header>
+ 
+       {/* Tracklist */}
+-      <section className="flex flex-col gap-1 mt-4">
++      <section className="flex flex-col gap-0.5 mt-4">
+         {tracks.map((track, i) => (
+-          <div key={track.trackId} className="flex items-center gap-3">
+-            <span className="w-6 text-sm text-muted text-right tabular-nums shrink-0">
++          <div key={track.trackId} className="flex items-center gap-1 md:gap-3">
++            <span className="w-4 md:w-6 text-xs md:text-sm text-muted text-right tabular-nums shrink-0">
+               {i + 1}
+             </span>
+-            <div className="flex-1">
+-              <SongCard track={track} />
++            <div className="flex-1 min-w-0">
++              <SongCard track={track} context={tracks} contextIndex={i} />
+             </div>
+           </div>
+         ))}
+diff --git a/components/ArtistDetailView/ArtistDetailView.tsx b/components/ArtistDetailView/ArtistDetailView.tsx
+index 8f461f1..3a3c9e2 100644
+--- a/components/ArtistDetailView/ArtistDetailView.tsx
++++ b/components/ArtistDetailView/ArtistDetailView.tsx
+@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
+ import Image from "next/image"
+ import { useSearchParams } from "next/navigation"
+ 
+-import { ChevronLeftIcon, PlayIcon } from "components/icons"
++import { ChevronLeftIcon, PlayIcon, ShuffleIcon } from "components/icons"
+ import { Skeleton } from "components/Skeleton/Skeleton"
+ import { SongCard } from "components/SongCard/SongCard"
+ 
+@@ -21,7 +21,7 @@ interface ArtistDetailViewProps {
+ export function ArtistDetailView({ onBack }: ArtistDetailViewProps) {
+   const searchParams = useSearchParams()
+   const selectedArtistId = searchParams.get("id")
+-  const { playTrack } = usePlayerStore()
++  const { playContext, isShuffled, toggleShuffle } = usePlayerStore()
+   const { requireAuth } = useRequireAuth()
+   
+   const [artist, setArtist] = useState<ItunesArtist | null>(null)
+@@ -89,8 +89,19 @@ export function ArtistDetailView({ onBack }: ArtistDetailViewProps) {
+   function handlePlayArtist() {
+     if (!firstPlayableTrack) return
+     requireAuth(() => {
+-      // For now, just play the first track. Ideally, this would queue the top tracks.
+-      playTrack(firstPlayableTrack)
++      const startIndex = tracks.findIndex(t => t.trackId === firstPlayableTrack.trackId)
++      playContext(tracks, startIndex >= 0 ? startIndex : 0)
++    })
++  }
++
++  function handleShuffleArtist() {
++    if (!firstPlayableTrack) return
++    requireAuth(() => {
++      if (!isShuffled) {
++        toggleShuffle()
++      }
++      const startIndex = Math.floor(Math.random() * tracks.length)
++      playContext(tracks, startIndex)
+     })
+   }
+ 
+@@ -106,53 +117,65 @@ export function ArtistDetailView({ onBack }: ArtistDetailViewProps) {
+       </button>
+ 
+       {/* Header */}
+-      <header className="flex flex-col md:flex-row gap-6 md:items-end">
++      <header className="flex flex-col items-center md:items-end md:flex-row gap-6 text-center md:text-left">
+         {artist.artworkUrl ? (
+           <Image
+             src={artist.artworkUrl}
+             alt={artist.artistName}
+             width={220}
+             height={220}
+-            className="rounded-full shadow-2xl shrink-0 object-cover"
++            className="rounded-full shadow-2xl shrink-0 object-cover w-32 h-32 md:w-[220px] md:h-[220px]"
+             priority
+           />
+         ) : (
+-          <div className="size-[220px] rounded-full bg-gradient-brand flex items-center justify-center shrink-0 shadow-2xl text-6xl font-bold text-bg">
++          <div className="size-32 md:size-[220px] rounded-full bg-gradient-brand flex items-center justify-center shrink-0 shadow-2xl text-4xl md:text-6xl font-bold text-bg">
+             {initials}
+           </div>
+         )}
+-        <div className="flex flex-col justify-end">
++        <div className="flex flex-col items-center md:items-start justify-end">
+           <span className="text-xs font-bold uppercase tracking-[0.1em] text-muted mb-2">
+             Artist
+           </span>
+-          <h1 className="text-5xl md:text-7xl font-extrabold text-primary mb-3 tracking-tight balance-text">
++          <h1 className="text-3xl md:text-7xl font-extrabold text-primary mb-3 tracking-tight balance-text line-clamp-2">
+             {artist.artistName}
+           </h1>
+           <div className="flex items-center gap-2 text-sm text-primary/70 mb-4">
+             <span>{artist.primaryGenreName}</span>
+           </div>
+-          <button
+-            onClick={handlePlayArtist}
+-            disabled={!firstPlayableTrack}
+-            className={cn(
+-              "flex items-center justify-center size-14 rounded-full bg-primary text-bg hover:scale-105 transition-all shadow-glow-sm cursor-pointer border-0 disabled:opacity-50 disabled:cursor-not-allowed",
+-            )}
+-          >
+-            <PlayIcon width={24} height={24} className="ml-1" />
+-          </button>
++          <div className="flex items-center gap-3">
++            <button
++              onClick={handlePlayArtist}
++              disabled={!firstPlayableTrack}
++              className={cn(
++                "flex items-center justify-center size-12 md:size-14 rounded-full bg-primary text-bg hover:scale-105 transition-all shadow-glow-sm cursor-pointer border-0 disabled:opacity-50 disabled:cursor-not-allowed",
++              )}
++            >
++              <PlayIcon width={24} height={24} className="ml-1" />
++            </button>
++            <button
++              onClick={handleShuffleArtist}
++              disabled={!firstPlayableTrack}
++              className={cn(
++                "flex items-center justify-center size-10 md:size-12 rounded-full border border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed",
++              )}
++              title="Shuffle"
++            >
++              <ShuffleIcon width={20} height={20} />
++            </button>
++          </div>
+         </div>
+       </header>
+ 
+       {/* Tracklist */}
+-      <section className="flex flex-col gap-1 mt-4">
++      <section className="flex flex-col gap-0.5 mt-4">
+         <h2 className="text-xl font-bold text-primary tracking-[-0.01em] mb-3">Popular Tracks</h2>
+         {tracks.map((track, i) => (
+-          <div key={track.trackId} className="flex items-center gap-3">
+-            <span className="w-6 text-sm text-muted text-right tabular-nums shrink-0">
++          <div key={track.trackId} className="flex items-center gap-1 md:gap-3">
++            <span className="w-4 md:w-6 text-xs md:text-sm text-muted text-right tabular-nums shrink-0">
+               {i + 1}
+             </span>
+-            <div className="flex-1">
+-              <SongCard track={track} />
++            <div className="flex-1 min-w-0">
++              <SongCard track={track} context={tracks} contextIndex={i} />
+             </div>
+           </div>
+         ))}
+diff --git a/components/GenreDetailView/GenreDetailView.tsx b/components/GenreDetailView/GenreDetailView.tsx
+index 9b7876c..f397349 100644
+--- a/components/GenreDetailView/GenreDetailView.tsx
++++ b/components/GenreDetailView/GenreDetailView.tsx
+@@ -83,7 +83,7 @@ export function GenreDetailView({ genreName, onBack }: GenreDetailViewProps) {
+             <div key={track.trackId} className="flex items-center gap-4 w-full group">
+               <span className="w-8 text-sm font-bold text-muted text-right group-hover:text-primary transition-colors tabular-nums">{idx + 1}</span>
+               <div className="flex-1 min-w-0">
+-                <SongCard track={track} />
++                <SongCard track={track} context={songs} contextIndex={idx} />
+               </div>
+             </div>
+           ))}
+diff --git a/components/HomeContent/HomeContent.tsx b/components/HomeContent/HomeContent.tsx
+index 50dcf40..1d4dc77 100644
+--- a/components/HomeContent/HomeContent.tsx
++++ b/components/HomeContent/HomeContent.tsx
+@@ -69,13 +69,13 @@ export function HomeContent({ activeView, onNavClick }: HomeContentProps) {
+   if (activeView === "songs" && trendingSongs.length > 0) {
+     return (
+       <section className="animate-in fade-in duration-500 pb-24">
+-        <h2 className="text-3xl md:text-4xl font-semibold text-primary tracking-tight mb-8">Trending Songs</h2>
+-        <div className="flex flex-col gap-1 w-full max-w-5xl">
++        <h2 className="text-2xl md:text-4xl font-semibold text-primary tracking-tight mb-6">Trending Songs</h2>
++        <div className="flex flex-col gap-0.5 w-full max-w-5xl">
+           {trendingSongs.map((track, index) => (
+-            <div key={track.trackId} className="flex items-center gap-2">
+-              <span className="w-5 text-xs text-muted text-right shrink-0">{index + 1}</span>
+-              <div className="flex-1">
+-                <SongCard track={track} />
++            <div key={track.trackId} className="flex items-center gap-1 md:gap-3">
++              <span className="w-4 md:w-5 text-xs text-muted text-right shrink-0">{index + 1}</span>
++              <div className="flex-1 min-w-0">
++                <SongCard track={track} context={trendingSongs} contextIndex={index} />
+               </div>
+             </div>
+           ))}
+@@ -101,7 +101,7 @@ export function HomeContent({ activeView, onNavClick }: HomeContentProps) {
+     return (
+       <section className="animate-in fade-in duration-500 pb-24">
+         <h2 className="text-3xl md:text-4xl font-semibold text-primary tracking-tight mb-8">Popular Artists</h2>
+-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
++        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-6">
+           {popularArtists.map((artist) => (
+             <ArtistTile key={artist.artistId} artist={artist} onNavClick={onNavClick} />
+           ))}
+@@ -117,7 +117,7 @@ export function HomeContent({ activeView, onNavClick }: HomeContentProps) {
+       <section className="animate-in fade-in duration-500 pb-24">
+         <h2 className="text-3xl md:text-4xl font-semibold text-primary tracking-tight mb-8">Top Podcasts</h2>
+         {topPodcasts.length > 0 ? (
+-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
++          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-6">
+             {topPodcasts.map(podcast => (
+               <AlbumTile
+                 key={podcast.collectionId}
+@@ -127,7 +127,7 @@ export function HomeContent({ activeView, onNavClick }: HomeContentProps) {
+             ))}
+           </div>
+         ) : (
+-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
++          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-6">
+             {Array.from({ length: 10 }).map((_, i) => (
+                <div key={i} className="flex flex-col gap-3">
+                  <Skeleton className="aspect-square rounded-[1.25rem]" />
+@@ -180,12 +180,12 @@ export function HomeContent({ activeView, onNavClick }: HomeContentProps) {
+             <h2 className="text-3xl md:text-4xl font-semibold text-primary tracking-tight">Trending Songs</h2>
+             <button onClick={() => onNavClick("songs")} className="text-xs font-bold text-muted hover:text-primary transition-colors   tracking-widest hidden sm:block">See All</button>
+           </div>
+-          <div className="flex flex-col gap-1 w-full max-w-5xl">
++          <div className="flex flex-col gap-0.5 w-full max-w-5xl">
+             {restSongs.map((track, idx) => (
+-              <div key={track.trackId} className="flex items-center gap-4 w-full group">
+-                <span className="w-5 text-sm font-bold text-muted text-right group-hover:text-primary transition-colors">{idx + 1}</span>
++              <div key={track.trackId} className="flex items-center gap-1 md:gap-4 w-full group">
++                <span className="w-4 md:w-5 text-sm font-bold text-muted text-right group-hover:text-primary transition-colors shrink-0">{idx + 1}</span>
+                 <div className="flex-1 min-w-0">
+-                  <SongCard track={track} />
++                  <SongCard track={track} context={restSongs} contextIndex={idx} />
+                 </div>
+               </div>
+             ))}
+@@ -193,7 +193,7 @@ export function HomeContent({ activeView, onNavClick }: HomeContentProps) {
+         </section>
+       )}
+ 
+-      {/* Popular Artists */}
++
+       {(filter === "all" || filter === "music") && (
+         <section className="mb-16">
+           <div className="flex items-end justify-between mb-6">
+@@ -263,10 +263,10 @@ export function HomeContent({ activeView, onNavClick }: HomeContentProps) {
+             <h2 className="text-3xl md:text-4xl font-semibold text-primary tracking-tight">Discover Something New</h2>
+             <button onClick={() => onNavClick("songs")} className="text-xs font-bold text-muted hover:text-primary transition-colors tracking-widest hidden sm:block">See All</button>
+           </div>
+-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-6">
+-            {discoverSongs.map((track) => (
++          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-6">
++            {discoverSongs.map((track, idx) => (
+               <div key={track.trackId}>
+-                <TrackTile track={track} />
++                <TrackTile track={track} context={discoverSongs} contextIndex={idx} />
+               </div>
+             ))}
+           </div>
+@@ -278,12 +278,24 @@ export function HomeContent({ activeView, onNavClick }: HomeContentProps) {
+             <h2 className="text-3xl md:text-4xl font-semibold text-primary tracking-tight">Top Podcasts</h2>
+             <button onClick={() => onNavClick("podcasts")} className="text-xs font-bold text-muted hover:text-primary transition-colors uppercase tracking-widest hidden sm:block">See All</button>
+           </div>
+-          <div className="flex overflow-x-auto pb-6 -mx-6 px-6 gap-6 snap-x snap-mandatory [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
++          {/* Mobile: List view */}
++          <div className="flex flex-col gap-3 md:hidden">
++            {topPodcasts.map(podcast => (
++              <AlbumTile
++                key={podcast.collectionId}
++                album={podcast}
++                variant="list"
++                onNavClick={() => onNavClick("podcast_detail", String(podcast.collectionId))}
++              />
++            ))}
++          </div>
++
++          {/* Desktop: Horizontal scroll */}
++          <div className="hidden md:flex overflow-x-auto pb-6 -mx-6 px-6 gap-6 snap-x snap-mandatory [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+             {topPodcasts.map(podcast => (
+-              <div key={podcast.collectionId} className="w-[140px] md:w-[160px] shrink-0 snap-center">
++              <div key={podcast.collectionId} className="w-[160px] shrink-0 snap-center">
+                 <AlbumTile
+                   album={podcast}
+-
+                   onNavClick={() => onNavClick("podcast_detail", String(podcast.collectionId))}
+                 />
+               </div>
+@@ -295,12 +307,30 @@ export function HomeContent({ activeView, onNavClick }: HomeContentProps) {
+   )
+ }
+ 
+-function AlbumTile({ album, onNavClick }: { album: ItunesAlbum; onNavClick?: (view: ActiveView, id?: string) => void }) {
++function AlbumTile({ album, onNavClick, variant = "grid" }: { album: ItunesAlbum; onNavClick?: (view: ActiveView, id?: string) => void, variant?: "grid" | "list" }) {
+   const artworkUrl = album.artworkUrl100.replace("100x100", "300x300")
+-  const year = extractReleaseYear(album.releaseDate)
+ 
+   function handleClick() {
+-    if (onNavClick) onNavClick("album_detail", String(album.collectionId))
++    if (onNavClick) onNavClick("podcast_detail" in album || album.primaryGenreName === "Podcasts" ? "podcast_detail" : "album_detail", String(album.collectionId))
++  }
++
++  if (variant === "list") {
++    return (
++      <div
++        onClick={handleClick}
++        className="group/album flex items-center gap-4 p-2 rounded-xl transition-all duration-300 cursor-pointer hover:bg-surface-elevated"
++      >
++        <div className="relative size-16 md:size-20 rounded-xl overflow-hidden shadow-sm shrink-0">
++          <Image src={artworkUrl} alt={album.collectionName} fill className="object-cover" />
++        </div>
++        <div className="flex-1 min-w-0">
++          <p className="text-sm font-bold text-primary truncate m-0 group-hover/album:text-green-500 transition-colors uppercase tracking-tight">
++            {album.collectionName}
++          </p>
++          <p className="text-xs text-muted mt-1 m-0 truncate font-medium">{album.artistName}</p>
++        </div>
++      </div>
++    )
+   }
+ 
+   return (
+@@ -317,12 +347,10 @@ function AlbumTile({ album, onNavClick }: { album: ItunesAlbum; onNavClick?: (vi
+           fill
+           className="object-cover transition-transform duration-500 group-hover/album:scale-[1.05]"
+         />
+-        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/album:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+-        </div>
+       </div>
+-      <div>
+-        <p className="text-sm font-bold text-primary truncate m-0 group-hover/album:text-green-500 transition-colors">{album.collectionName}</p>
+-        <p className="text-xs text-muted mt-0.5 m-0 truncate font-medium">{album.artistName} &middot; {year}</p>
++      <div className="mt-2 md:mt-3 px-1">
++        <p className="text-[13px] md:text-sm font-bold text-primary truncate m-0 group-hover/album:text-green-500 transition-colors uppercase tracking-tight">{album.collectionName}</p>
++        <p className="text-[11px] md:text-xs text-muted mt-0.5 m-0 truncate font-medium">{album.artistName}</p>
+       </div>
+     </div>
+   )
+@@ -359,16 +387,16 @@ function ArtistTile({ artist, onNavClick }: { artist: ItunesArtist, onNavClick?:
+           </div>
+         )}
+       </div>
+-      <p className="text-sm font-bold text-primary truncate w-full text-center m-0 group-hover:text-green-500 transition-colors">{artist.artistName}</p>
+-      <p className="text-xs text-muted mt-1 m-0 uppercase tracking-widest font-semibold">
++      <p className="text-[13px] md:text-sm font-bold text-primary truncate w-full text-center m-0 group-hover:text-green-500 transition-colors px-1">{artist.artistName}</p>
++      <p className="text-[10px] md:text-xs text-muted mt-0.5 md:mt-1 m-0 uppercase tracking-widest font-semibold opacity-60">
+         Artist
+       </p>
+     </div>
+   )
+ }
+ 
+-function TrackTile({ track }: { track: ItunesTrack }) {
+-  const { currentTrack, isPlaying, playTrack, togglePlay } = usePlayerStore()
++function TrackTile({ track, context, contextIndex }: { track: ItunesTrack; context?: ItunesTrack[]; contextIndex?: number }) {
++  const { currentTrack, isPlaying, playTrack, playContext, togglePlay } = usePlayerStore()
+   const { requireAuth } = useRequireAuth()
+   const artworkUrl = track.artworkUrl100.replace("100x100", "300x300")
+   const isCurrentTrack = currentTrack?.trackId === track.trackId
+@@ -381,7 +409,11 @@ function TrackTile({ track }: { track: ItunesTrack }) {
+       if (isCurrentTrack) {
+         togglePlay()
+       } else {
+-        playTrack(track)
++        if (context && contextIndex !== undefined) {
++          playContext(context, contextIndex)
++        } else {
++          playTrack(track)
++        }
+       }
+     })
+   }
+diff --git a/components/LikedSongsView/LikedSongsView.tsx b/components/LikedSongsView/LikedSongsView.tsx
+index ff19896..a2d5668 100644
+--- a/components/LikedSongsView/LikedSongsView.tsx
++++ b/components/LikedSongsView/LikedSongsView.tsx
+@@ -56,9 +56,9 @@ export function LikedSongsView() {
+   return (
+     <div className="animate-fade-in-up">
+       <div className="mb-8">
+-        <h1 className="text-2xl md:text-3xl font-bold text-primary tracking-tight m-0">Liked Songs</h1>
++        <h1 className="text-2xl md:text-3xl font-bold text-primary tracking-tight m-0">Your Library</h1>
+         <p className="text-muted mt-1.5 m-0 text-sm sm:text-base">
+-          {tracks.length} track{tracks.length !== 1 ? 's' : ''} saved to your library.
++          {tracks.length} item{tracks.length !== 1 ? 's' : ''} saved to your library.
+         </p>
+       </div>
+ 
+diff --git a/components/MiniPlayer/MiniPlayer.tsx b/components/MiniPlayer/MiniPlayer.tsx
+index e91cfdc..ebd46b1 100644
+--- a/components/MiniPlayer/MiniPlayer.tsx
++++ b/components/MiniPlayer/MiniPlayer.tsx
+@@ -7,7 +7,6 @@ import { useEffect, useRef, useState } from "react"
+ import Image from "next/image"
+ import { useRouter } from "next/navigation"
+ 
+-import { AddToPlaylistButton } from "components/AddToPlaylistButton/AddToPlaylistButton"
+ import {
+   ChevronDownIcon,
+   ChevronUpIcon,
+@@ -15,17 +14,26 @@ import {
+   PauseIcon,
+   PlayIcon,
+   RepeatIcon,
++  ShuffleIcon,
+   SkipBackIcon,
+   SkipForwardIcon,
+   VolumeIcon,
+ } from "components/icons"
++import { LikeButton } from "components/LikeButton/LikeButton"
++import { ScrollingText } from "components/ScrollingText/ScrollingText"
++import { TrackContextMenu } from "components/TrackContextMenu/TrackContextMenu"
+ import { cn } from "lib/cn"
++import { searchSongs } from "lib/itunes/api"
++import type { ItunesTrack } from "lib/itunes/types"
+ import { formatDuration } from "lib/itunes/utils"
+ import { useAppStore } from "store/useAppStore"
+ import { usePlayerStore } from "store/usePlayerStore"
+ 
+ export function MiniPlayer() {
+-  const { currentTrack, isPlaying, togglePlay, volume, setVolume } = usePlayerStore()
++  const { 
++    currentTrack, isPlaying, togglePlay, volume, setVolume, 
++    playNext, playPrevious, isShuffled, toggleShuffle, isRepeat, toggleRepeat 
++  } = usePlayerStore()
+   const { isSidebarCollapsed, isFullPagePlayerOpen, setFullPagePlayerOpen } = useAppStore()
+   const router = useRouter()
+   const audioRef = useRef<HTMLAudioElement | null>(null)
+@@ -33,7 +41,6 @@ export function MiniPlayer() {
+   const [progress, setProgress] = useState(0)
+   const [currentTime, setCurrentTime] = useState(0)
+   const [duration, setDuration] = useState(0)
+-  const [isRepeat, setIsRepeat] = useState(false)
+   const [isDragging] = useState(false)
+ 
+   // Pop-out mini player state
+@@ -49,23 +56,40 @@ export function MiniPlayer() {
+   // Load and play new track when currentTrack changes
+   useEffect(() => {
+     if (!currentTrack?.previewUrl) return
+-
+-    if (!audioRef.current) {
+-      audioRef.current = new Audio()
++    
++    // Always create a new audio element to guarantee a clean slate and avoid Safari/Chrome media race conditions
++    if (audioRef.current) {
++      audioRef.current.pause()
++      audioRef.current.src = ""
+     }
+-
+-    audioRef.current.src = currentTrack.previewUrl
+-    audioRef.current.play().catch(() => { })
++    
++    const audio = new Audio()
++    // Important: crossOrigin allows properly tracking media events sometimes blocked otherwise
++    audio.crossOrigin = "anonymous" 
++    audioRef.current = audio
++
++    audio.src = currentTrack.previewUrl
++    audio.volume = volume
++
++    // Playback starting logic
++    audio.play().catch((e) => {
++      console.error("[MiniPlayer] Autoplay failed:", e)
++    })
++    
+     setProgress(0)
+     setCurrentTime(0)
++    
+   }, [currentTrack?.previewUrl])
+ 
+   // Sync play/pause
+   useEffect(() => {
+     const audio = audioRef.current
+     if (!audio) return
+-    if (isPlaying) audio.play().catch(() => { })
+-    else audio.pause()
++    if (isPlaying) {
++      audio.play().catch(() => { })
++    } else {
++      audio.pause()
++    }
+   }, [isPlaying])
+ 
+   // Sync volume
+@@ -73,23 +97,94 @@ export function MiniPlayer() {
+     if (audioRef.current) audioRef.current.volume = volume
+   }, [volume])
+ 
+-  // Sync repeat (re-attach ended listener whenever isRepeat changes)
++  // Attach ended listener (separating from currentTrack changes so it stays stable)
+   useEffect(() => {
+     const audio = audioRef.current
+     if (!audio) return
+-    const onEnded = () => {
++    
++    const onEnded = async () => {
++      const store = usePlayerStore.getState()
++      
+       if (isRepeat) {
+         audio.currentTime = 0
+         audio.play().catch(() => { })
+       } else {
+-        usePlayerStore.getState().stop()
+-        setProgress(0)
+-        setCurrentTime(0)
++        // Check if there's anything upcoming in either queue
++        if (store.queue.length > 0 || store.contextQueue.length > 0) {
++          store.playNext()
++        } else if (store.currentTrack) {
++          // Fallback handled in discovery useEffect primarily, 
++          // but we keep this as a safety net.
++          store.stop()
++        } else {
++          store.stop()
++        }
+       }
+     }
++    
+     audio.addEventListener("ended", onEnded)
+     return () => audio.removeEventListener("ended", onEnded)
+-  }, [isRepeat])
++  }, [isRepeat, currentTrack])
++
++  // ─────── DISCOVERY / AI AUTOPLAY ───────
++  const { playbackContext } = usePlayerStore()
++  const [isFetchingDiscovery, setIsFetchingDiscovery] = useState(false)
++
++  useEffect(() => {
++    const store = usePlayerStore.getState()
++    if (!currentTrack || playbackContext !== "search") return
++    
++    // Only fetch if queue is actually empty (discovery mode)
++    if (store.queue.length > 0 || store.contextQueue.length > 0) return
++    if (isFetchingDiscovery) return
++
++    async function triggerDiscovery() {
++      if (!currentTrack) return
++      setIsFetchingDiscovery(true)
++      console.info(`[Discovery] Triggering for: ${currentTrack.trackName} (${currentTrack.primaryGenreName})`)
++
++      try {
++        const res = await fetch("/api/ai/autoplay", {
++          method: "POST",
++          headers: { "Content-Type": "application/json" },
++          body: JSON.stringify({ genre: currentTrack.primaryGenreName || "Music" })
++        })
++
++        if (!res.ok) throw new Error("Discovery API failed")
++        const { suggestions } = await res.json() as { suggestions: string[] }
++        console.info(`[Discovery] Received AI Suggestions:`, suggestions)
++
++        // Fetch top songs for these suggestions
++        console.info(`[Discovery] Searching iTunes for related tracks...`)
++        const tracksResults = await Promise.allSettled(
++          suggestions.slice(0, 3).map(s => {
++            console.info(`[Discovery] -> Fetching for suggestion: "${s}"`)
++            return searchSongs(s)
++          })
++        )
++
++        const discoveryTracks: ItunesTrack[] = []
++        for (const r of tracksResults) {
++          if (r.status === "fulfilled") {
++            // Take 2 tracks per suggestion
++            discoveryTracks.push(...r.value.slice(0, 2))
++          }
++        }
++
++        if (discoveryTracks.length > 0) {
++          console.info(`[Discovery] Injected ${discoveryTracks.length} tracks into queue`)
++          // Update store's contextQueue directly
++          usePlayerStore.setState({ contextQueue: discoveryTracks })
++        }
++      } catch (err) {
++        console.error("[Discovery] Failed:", err)
++      } finally {
++        setIsFetchingDiscovery(false)
++      }
++    }
++
++    triggerDiscovery()
++  }, [currentTrack?.trackId, playbackContext])
+ 
+   // Butter-smooth progress updates via rAF
+   useEffect(() => {
+@@ -114,6 +209,48 @@ export function MiniPlayer() {
+     return () => { audioRef.current?.pause() }
+   }, [])
+ 
++  // ─────── KEYBOARD SHORTCUTS ───────
++  useEffect(() => {
++    const handleKeyDown = (e: KeyboardEvent) => {
++      // Ignore if user is typing in an input, textarea, etc.
++      if (
++        document.activeElement?.tagName === "INPUT" ||
++        document.activeElement?.tagName === "TEXTAREA" ||
++        (document.activeElement as HTMLElement)?.isContentEditable
++      ) {
++        return
++      }
++
++      switch (e.code) {
++        case "Space":
++          e.preventDefault()
++          togglePlay()
++          break
++        case "ArrowRight":
++          if (e.metaKey || e.ctrlKey) {
++            e.preventDefault()
++            handleNextTrack()
++          }
++          break
++        case "ArrowLeft":
++          if (e.metaKey || e.ctrlKey) {
++            e.preventDefault()
++            handlePrevTrack()
++          }
++          break
++        case "KeyM":
++          e.preventDefault()
++          setVolume(volume === 0 ? 0.5 : 0)
++          break
++        default:
++          break
++      }
++    }
++
++    window.addEventListener("keydown", handleKeyDown)
++    return () => window.removeEventListener("keydown", handleKeyDown)
++  }, [togglePlay, handleNextTrack, handlePrevTrack, volume, setVolume])
++
+   if (!currentTrack) return null
+ 
+   const artworkUrl = currentTrack.artworkUrl100.replace("100x100", "300x300")
+@@ -136,14 +273,17 @@ export function MiniPlayer() {
+     seekTo(getRatioFromMouseEvent(e))
+   }
+ 
+-  function handleSkipBack() {
+-    if (audioRef.current)
+-      audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 5)
++  function handlePrevTrack() {
++    const audio = audioRef.current
++    if (audio && audio.currentTime > 3) {
++      audio.currentTime = 0
++    } else {
++      playPrevious()
++    }
+   }
+ 
+-  function handleSkipForward() {
+-    if (audioRef.current)
+-      audioRef.current.currentTime = Math.min(audioRef.current.duration, audioRef.current.currentTime + 5)
++  function handleNextTrack() {
++    playNext()
+   }
+ 
+   function handleVolumeChange(e: React.ChangeEvent<HTMLInputElement>) {
+@@ -205,7 +345,10 @@ export function MiniPlayer() {
+           <ChevronDownIcon width={22} height={22} />
+         </button>
+         <span className="text-white/60 text-sm font-medium tracking-widest uppercase">Now Playing</span>
+-        <AddToPlaylistButton trackId={currentTrack.trackId} />
++        <div className="flex items-center gap-2">
++          <LikeButton trackId={currentTrack.trackId} size={22} className="text-white/60 hover:text-white" />
++          <TrackContextMenu track={currentTrack} variant="dark" />
++        </div>
+       </div>
+ 
+       {/* Main content */}
+@@ -260,7 +403,18 @@ export function MiniPlayer() {
+         {/* Controls */}
+         <div className="w-full flex items-center justify-between">
+           <button
+-            onClick={() => setIsRepeat(!isRepeat)}
++            onClick={toggleShuffle}
++            className={cn(
++              "size-10 flex items-center justify-center rounded-full transition-colors",
++              isShuffled ? "text-white bg-white/20" : "text-white/40 hover:text-white"
++            )}
++            title="Shuffle"
++          >
++            <ShuffleIcon width={22} height={22} />
++          </button>
++
++          <button
++            onClick={toggleRepeat}
+             className={cn(
+               "size-10 flex items-center justify-center rounded-full transition-colors",
+               isRepeat ? "text-white bg-white/20" : "text-white/40 hover:text-white"
+@@ -271,9 +425,9 @@ export function MiniPlayer() {
+           </button>
+ 
+           <button
+-            onClick={handleSkipBack}
++            onClick={handlePrevTrack}
+             className="size-12 flex items-center justify-center rounded-full text-white hover:bg-white/10 transition-colors"
+-            title="-5s"
++            title="Previous track"
+           >
+             <SkipBackIcon width={28} height={28} />
+           </button>
+@@ -289,9 +443,9 @@ export function MiniPlayer() {
+           </button>
+ 
+           <button
+-            onClick={handleSkipForward}
++            onClick={handleNextTrack}
+             className="size-12 flex items-center justify-center rounded-full text-white hover:bg-white/10 transition-colors"
+-            title="+5s"
++            title="Next track"
+           >
+             <SkipForwardIcon width={28} height={28} />
+           </button>
+@@ -361,7 +515,7 @@ export function MiniPlayer() {
+       </div>
+ 
+       <div className="flex items-center justify-between px-3 pb-3 gap-1">
+-        <button onClick={handleSkipBack} className="size-8 flex items-center justify-center rounded-full text-muted hover:text-primary transition-colors">
++        <button onClick={handlePrevTrack} className="size-8 flex items-center justify-center rounded-full text-muted hover:text-primary transition-colors">
+           <SkipBackIcon width={16} height={16} />
+         </button>
+         <button
+@@ -370,7 +524,7 @@ export function MiniPlayer() {
+         >
+           {isPlaying ? <PauseIcon width={14} height={14} /> : <PlayIcon width={14} height={14} className="ml-0.5" />}
+         </button>
+-        <button onClick={handleSkipForward} className="size-8 flex items-center justify-center rounded-full text-muted hover:text-primary transition-colors">
++        <button onClick={handleNextTrack} className="size-8 flex items-center justify-center rounded-full text-muted hover:text-primary transition-colors">
+           <SkipForwardIcon width={16} height={16} />
+         </button>
+         <div className="flex items-center gap-1 flex-1 ml-1">
+@@ -382,7 +536,7 @@ export function MiniPlayer() {
+             step="0.01"
+             value={volume}
+             onChange={handleVolumeChange}
+-            className="w-full h-1 bg-gray-300 dark:bg-white/30 accent-black dark:accent-white cursor-pointer rounded-full"
++            className="w-full h-1 bg-surface-elevated accent-primary cursor-pointer rounded-full"
+           />
+         </div>
+       </div>
+@@ -422,9 +576,11 @@ export function MiniPlayer() {
+                 className="w-full h-full object-cover"
+               />
+             </div>
+-            <div className="flex flex-col min-w-0">
+-              <span className="text-xs md:text-sm font-semibold text-primary truncate flex items-center gap-1.5">
+-                {currentTrack.trackName}
++            <div className="flex flex-col min-w-0 flex-1 overflow-hidden">
++              <div className="flex items-center gap-1.5 min-w-0 overflow-hidden">
++                <div className="text-xs md:text-sm font-semibold text-primary min-w-0 flex-1 overflow-hidden">
++                  <ScrollingText text={currentTrack.trackName} />
++                </div>
+                 {isPlaying && (
+                   <span className="flex items-end gap-[1.5px] h-3 shrink-0">
+                     <span className="w-[2px] bg-primary animate-eq-bar-1 rounded-full" />
+@@ -432,7 +588,7 @@ export function MiniPlayer() {
+                     <span className="w-[2px] bg-primary animate-eq-bar-3 rounded-full" />
+                   </span>
+                 )}
+-              </span>
++              </div>
+               <button
+                 className="text-[11px] text-muted truncate text-left hover:text-primary transition-colors"
+                 onClick={() => router.push(`/?view=artist_detail&id=${currentTrack.artistId}`, { scroll: false })}
+@@ -440,15 +596,16 @@ export function MiniPlayer() {
+                 {currentTrack.artistName}
+               </button>
+             </div>
++            <LikeButton trackId={currentTrack.trackId} size={18} className="ml-1 hidden md:block" />
+           </div>
+ 
+           {/* Center — transport & progress (hidden on mobile) */}
+           <div className="hidden md:flex flex-col items-center justify-center gap-1.5 flex-1 max-w-[40%]">
+             <div className="flex items-center gap-4">
+-              {/* -5s */}
++              {/* Previous */}
+               <button
+-                onClick={handleSkipBack}
+-                title="-5s"
++                onClick={handlePrevTrack}
++                title="Previous track"
+                 className="size-8 flex items-center justify-center rounded-full text-muted hover:text-primary hover:bg-surface-elevated transition-colors"
+               >
+                 <SkipBackIcon width={18} height={18} />
+@@ -466,18 +623,30 @@ export function MiniPlayer() {
+                 }
+               </button>
+ 
+-              {/* +5s */}
++              {/* Next */}
+               <button
+-                onClick={handleSkipForward}
+-                title="+5s"
++                onClick={handleNextTrack}
++                title="Next track"
+                 className="size-8 flex items-center justify-center rounded-full text-muted hover:text-primary hover:bg-surface-elevated transition-colors"
+               >
+                 <SkipForwardIcon width={18} height={18} />
+               </button>
+ 
++              {/* Shuffle */}
++              <button
++                onClick={toggleShuffle}
++                title={isShuffled ? "Shuffle: On" : "Shuffle: Off"}
++                className={cn(
++                  "size-8 flex items-center justify-center rounded-full transition-colors",
++                  isShuffled ? "text-primary bg-primary/10" : "text-muted hover:text-primary hover:bg-surface-elevated"
++                )}
++              >
++                <ShuffleIcon width={16} height={16} />
++              </button>
++
+               {/* Repeat */}
+               <button
+-                onClick={() => setIsRepeat(!isRepeat)}
++                onClick={toggleRepeat}
+                 title={isRepeat ? "Repeat: On" : "Repeat: Off"}
+                 className={cn(
+                   "size-8 flex items-center justify-center rounded-full transition-colors",
+@@ -518,8 +687,8 @@ export function MiniPlayer() {
+ 
+           {/* Right — volume + utilities */}
+           <div className="hidden md:flex items-center gap-2 md:w-[28%] justify-end">
+-            {/* Add to Playlist — uses the existing component, portal-rendered dropdown */}
+-            <AddToPlaylistButton trackId={currentTrack.trackId} />
++            {/* 3-dot context menu */}
++            <TrackContextMenu track={currentTrack} />
+ 
+             {/* Volume */}
+             <div className="flex items-center gap-1.5 w-24 group">
+@@ -528,7 +697,7 @@ export function MiniPlayer() {
+                 type="range" min="0" max="1" step="0.01"
+                 value={volume}
+                 onChange={handleVolumeChange}
+-                className="w-full h-1 accent-black dark:accent-white cursor-pointer rounded-full"
++                className="w-full h-1 accent-primary cursor-pointer rounded-full opacity-80 hover:opacity-100 transition-opacity"
+               />
+             </div>
+ 
+diff --git a/components/PlaylistDetail/PlaylistDetail.tsx b/components/PlaylistDetail/PlaylistDetail.tsx
+index 8bef1b8..6737150 100644
+--- a/components/PlaylistDetail/PlaylistDetail.tsx
++++ b/components/PlaylistDetail/PlaylistDetail.tsx
+@@ -6,15 +6,17 @@
+ import { useEffect, useState } from "react"
+ import { useAuth } from "@clerk/nextjs"
+ 
+-import { ChevronLeftIcon, CloseIcon, LinkIcon, UsersIcon } from "components/icons"
++import { ChevronLeftIcon, CloseIcon, LinkIcon, PlayIcon, ShuffleIcon, UsersIcon } from "components/icons"
+ import { SharePlaylistModal } from "components/SharePlaylistModal/SharePlaylistModal"
+ import { Skeleton } from "components/Skeleton/Skeleton"
+ import { SongCard } from "components/SongCard/SongCard"
+ 
+ import { getPlaylist, removeTrack } from "lib/api/playlists"
+ import type { Playlist, PlaylistTrack } from "lib/api/playlists"
++import { cn } from "lib/cn"
+ import { fetchTracksByIds } from "lib/itunes/api"
+ import type { ItunesTrack } from "lib/itunes/types"
++import { usePlayerStore } from "store/usePlayerStore"
+ 
+ interface PlaylistDetailProps {
+   playlistId: string
+@@ -29,6 +31,7 @@ export function PlaylistDetail({ playlistId, onBack, initialData }: PlaylistDeta
+   const [isLoading, setIsLoading] = useState(!initialData)
+   const [isSharing, setIsSharing] = useState(false)
+   const { userId: currentUserId } = useAuth()
++  const { playContext, isShuffled, toggleShuffle } = usePlayerStore()
+ 
+   useEffect(() => {
+     async function loadDetail() {
+@@ -87,6 +90,20 @@ export function PlaylistDetail({ playlistId, onBack, initialData }: PlaylistDeta
+     }
+   }
+ 
++  function handlePlayPlaylist() {
++    if (enrichedTracks.length === 0) return
++    playContext(enrichedTracks, 0)
++  }
++
++  function handleShufflePlaylist() {
++    if (enrichedTracks.length === 0) return
++    if (!isShuffled) {
++      toggleShuffle()
++    }
++    const startIndex = Math.floor(Math.random() * enrichedTracks.length)
++    playContext(enrichedTracks, startIndex)
++  }
++
+   if (isLoading) {
+     return (
+       <div className="animate-fade-in-up">
+@@ -167,18 +184,42 @@ export function PlaylistDetail({ playlistId, onBack, initialData }: PlaylistDeta
+           </p>
+         )}
+ 
+-        <div className="flex items-center gap-4 mt-4">
+-          <p className="text-xs font-bold text-[#52525b] m-0 uppercase tracking-[0.1em]">
+-            {playlist.tracks?.length || 0} track{playlist.tracks?.length !== 1 ? "s" : ""}
+-          </p>
+-          {playlist.userId === currentUserId && (playlist._count?.shares || 0) > 0 && (
+-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20">
+-              <span className="size-1.5 rounded-full bg-primary animate-pulse" />
+-              <span className="text-[10px] font-bold text-primary uppercase tracking-wider">
+-                Shared with {playlist._count?.shares} {playlist._count?.shares === 1 ? 'person' : 'people'}
+-              </span>
+-            </div>
+-          )}
++        <div className="flex items-center gap-4 md:gap-6 mt-6">
++          <div className="flex items-center gap-3">
++            <button
++              onClick={handlePlayPlaylist}
++              disabled={enrichedTracks.length === 0}
++              className={cn(
++                "flex items-center justify-center size-12 md:size-14 rounded-full bg-primary text-bg hover:scale-105 transition-all shadow-glow-sm cursor-pointer border-0 disabled:opacity-50 disabled:cursor-not-allowed",
++              )}
++            >
++              <PlayIcon width={24} height={24} className="ml-1" />
++            </button>
++            <button
++              onClick={handleShufflePlaylist}
++              disabled={enrichedTracks.length === 0}
++              className={cn(
++                "flex items-center justify-center size-10 md:size-12 rounded-full border border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed",
++              )}
++              title="Shuffle"
++            >
++              <ShuffleIcon width={20} height={20} />
++            </button>
++          </div>
++          
++          <div className="flex items-center gap-3 md:gap-4">
++            <p className="text-[11px] md:text-xs font-bold text-[#52525b] m-0 uppercase tracking-[0.1em] shrink-0">
++              {playlist.tracks?.length || 0} track{playlist.tracks?.length !== 1 ? "s" : ""}
++            </p>
++            {playlist.userId === currentUserId && (playlist._count?.shares || 0) > 0 && (
++              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20 shrink-0">
++                <span className="size-1.5 rounded-full bg-primary animate-pulse hidden xs:block" />
++                <span className="text-[9px] md:text-[10px] font-bold text-primary uppercase tracking-wider">
++                   {playlist._count?.shares} {playlist._count?.shares === 1 ? 'Share' : 'Shares'}
++                </span>
++              </div>
++            )}
++          </div>
+         </div>
+       </div>
+ 
+@@ -192,7 +233,7 @@ export function PlaylistDetail({ playlistId, onBack, initialData }: PlaylistDeta
+         ) : (
+           enrichedTracks.map((track, i) => (
+             <div key={`${track.trackId}-${i}`} className="group relative pr-10 sm:pr-12">
+-              <SongCard track={track} />
++              <SongCard track={track} context={enrichedTracks} contextIndex={i} />
+               <button
+                 onClick={() => handleRemove(track.trackId)}
+                 className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 size-7 sm:size-8 rounded-full bg-red-500/10 text-red-400 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center border-0 cursor-pointer hover:bg-red-500/20"
+diff --git a/components/PodcastDetailView/PodcastDetailView.tsx b/components/PodcastDetailView/PodcastDetailView.tsx
+index 4698b24..85bb325 100644
+--- a/components/PodcastDetailView/PodcastDetailView.tsx
++++ b/components/PodcastDetailView/PodcastDetailView.tsx
+@@ -20,7 +20,7 @@ interface PodcastDetailViewProps {
+ }
+ 
+ export function PodcastDetailView({ podcastId, onBack }: PodcastDetailViewProps) {
+-  const { playTrack } = usePlayerStore()
++  const { playContext } = usePlayerStore()
+   const { requireAuth } = useRequireAuth()
+   
+   const [podcast, setPodcast] = useState<ItunesAlbum | null>(null)
+@@ -83,7 +83,8 @@ export function PodcastDetailView({ podcastId, onBack }: PodcastDetailViewProps)
+   function handlePlayLatest() {
+     if (!firstPlayableEpisode) return
+     requireAuth(() => {
+-      playTrack(firstPlayableEpisode)
++      const startIndex = episodes.findIndex(e => e.trackId === firstPlayableEpisode.trackId)
++      playContext(episodes, startIndex >= 0 ? startIndex : 0)
+     })
+   }
+ 
+@@ -138,9 +139,9 @@ export function PodcastDetailView({ podcastId, onBack }: PodcastDetailViewProps)
+       {/* Episodes List - using slightly larger cards for podcasts */}
+       <section className="flex flex-col gap-3 mt-4">
+         <h3 className="text-2xl font-bold mb-4">All Episodes</h3>
+-        {episodes.map((episode) => (
++        {episodes.map((episode, i) => (
+           <div key={episode.trackId} className="bg-surface/50 hover:bg-surface border border-transparent hover:border-border rounded-xl p-2 transition-all">
+-            <SongCard track={episode} />
++            <SongCard track={episode} context={episodes} contextIndex={i} />
+           </div>
+         ))}
+       </section>
+diff --git a/components/SearchResults/SearchResults.tsx b/components/SearchResults/SearchResults.tsx
+index 5815aee..89d2e1b 100644
+--- a/components/SearchResults/SearchResults.tsx
++++ b/components/SearchResults/SearchResults.tsx
+@@ -43,7 +43,7 @@ export function SearchResults({ songs, albums, artists, isLoading, hasSearched,
+                 className="animate-fade-in-up"
+                 style={{ animationDelay: `${i * 30}ms` }}
+               >
+-                <SongCard track={track} />
++                <SongCard track={track} playbackContext="search" />
+               </div>
+             ))}
+           </div>
+@@ -52,7 +52,7 @@ export function SearchResults({ songs, albums, artists, isLoading, hasSearched,
+ 
+       {albums.length > 0 && (
+         <Section title="Albums" count={albums.length}>
+-          <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(160px,1fr))]">
++          <div className="grid gap-3 md:gap-4 [grid-template-columns:repeat(auto-fill,minmax(140px,1fr))]">
+             {albums.map((album, i) => (
+               <div
+                 key={album.collectionId}
+@@ -118,7 +118,7 @@ function SearchSkeletons() {
+       </section>
+       <section className="mb-10">
+         <Skeleton className="w-20 h-6 mb-4" />
+-        <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(160px,1fr))]">
++        <div className="grid gap-3 md:gap-4 [grid-template-columns:repeat(auto-fill,minmax(140px,1fr))]">
+           {Array.from({ length: 6 }).map((_, i) => (
+             <Skeleton key={i} className="h-[210px] rounded-3xl" />
+           ))}
+diff --git a/components/Sidebar/Sidebar.tsx b/components/Sidebar/Sidebar.tsx
+index f599816..916e806 100644
+--- a/components/Sidebar/Sidebar.tsx
++++ b/components/Sidebar/Sidebar.tsx
+@@ -13,10 +13,12 @@ import {
+   ArtistIcon,
+   ChevronLeftIcon,
+   DiscoverLogoIcon,
++  HeartFilledIcon,
+   HomeIcon,
+   LinkIcon,
+   MusicNoteIcon,
+   PlaylistIcon,
++  SparklesIcon,
+   UsersIcon
+ } from "components/icons"
+ import { ThemeToggle } from "components/ThemeToggle/ThemeToggle"
+@@ -84,6 +86,8 @@ export function Sidebar({
+ 
+   const navItems: { label: string; view: ActiveView; icon: React.ReactNode }[] = [
+     { label: "Home", view: "home", icon: <HomeIcon /> },
++    { label: "Suggested", view: "suggested", icon: <SparklesIcon width={20} height={20} /> },
++    { label: "Liked Songs", view: "liked-songs", icon: <HeartFilledIcon width={20} height={20} className="text-red-500" /> },
+     { label: "Songs", view: "songs", icon: <MusicNoteIcon /> },
+     ...(isPlaylistEnabled ? [{ label: "Playlists", view: "playlists" as ActiveView, icon: <PlaylistIcon /> }] : []),
+     { label: "Albums", view: "albums", icon: <AlbumIcon /> },
+diff --git a/components/SongCard/SongCard.tsx b/components/SongCard/SongCard.tsx
+index 2e375ce..898fcf8 100644
+--- a/components/SongCard/SongCard.tsx
++++ b/components/SongCard/SongCard.tsx
+@@ -4,10 +4,10 @@
+ // wednesday-dev: formatDuration helper, handlePlay event handler
+ 
+ import Image from "next/image"
+-import { useFeatureFlagEnabled } from "posthog-js/react"
+ 
+-import { AddToPlaylistButton } from "components/AddToPlaylistButton/AddToPlaylistButton"
+ import { EqualizerIcon, PauseIcon, PlayIcon } from "components/icons"
++import { LikeButton } from "components/LikeButton/LikeButton"
++import { TrackContextMenu } from "components/TrackContextMenu/TrackContextMenu"
+ import { cn } from "lib/cn"
+ import { useRequireAuth } from "lib/hooks/useRequireAuth"
+ import type { ItunesTrack } from "lib/itunes/types"
+@@ -16,12 +16,14 @@ import { usePlayerStore } from "store/usePlayerStore"
+ 
+ interface SongCardProps {
+   track: ItunesTrack
++  context?: ItunesTrack[]
++  contextIndex?: number
++  playbackContext?: "search" | "library" | "album" | null
+ }
+ 
+-export function SongCard({ track }: SongCardProps) {
+-  const { currentTrack, isPlaying, playTrack, togglePlay } = usePlayerStore()
++export function SongCard({ track, context, contextIndex, playbackContext }: SongCardProps) {
++  const { currentTrack, isPlaying, playTrack, playContext, togglePlay } = usePlayerStore()
+   const { requireAuth } = useRequireAuth()
+-  const isPlaylistEnabled = useFeatureFlagEnabled("playlist-feature") ?? false
+   const isCurrentTrack = currentTrack?.trackId === track.trackId
+   const isActiveAndPlaying = isCurrentTrack && isPlaying
+ 
+@@ -31,7 +33,11 @@ export function SongCard({ track }: SongCardProps) {
+       if (isCurrentTrack) {
+         togglePlay()
+       } else {
+-        playTrack(track)
++        if (context && contextIndex !== undefined) {
++          playContext(context, contextIndex, playbackContext)
++        } else {
++          playTrack(track, playbackContext)
++        }
+       }
+     })
+   }
+@@ -42,20 +48,19 @@ export function SongCard({ track }: SongCardProps) {
+     <div
+       onClick={handlePlay}
+       className={cn(
+-        "group flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-200 border active:scale-[0.98]",
++        "group flex items-center gap-2 md:gap-3 px-2 md:px-3 py-2 md:py-2.5 rounded-xl cursor-pointer transition-all duration-200 border active:scale-[0.98]",
+         isCurrentTrack
+           ? "bg-surface-elevated border-primary/20"
+           : "border-transparent hover:bg-surface-elevated/80"
+       )}
+     >
+-      {/* Artwork */}
+-      <div className="relative shrink-0">
++      {/* Artwork — 40px on mobile, 48px on md+ */}
++      <div className="relative shrink-0 size-10 md:size-12">
+         <Image
+           src={artworkUrl}
+           alt={track.collectionName}
+-          width={48}
+-          height={48}
+-          className="rounded-lg block transition-transform duration-200 group-hover:scale-105"
++          fill
++          className="rounded-lg block transition-transform duration-200 group-hover:scale-105 object-cover"
+         />
+         {isCurrentTrack ? (
+           <div className="absolute inset-0 rounded-lg bg-black/40 flex items-center justify-center">
+@@ -72,43 +77,48 @@ export function SongCard({ track }: SongCardProps) {
+         )}
+       </div>
+ 
+-      {/* Track info */}
++      {/* Track info — flex-1 min-w-0 ensures truncation works */}
+       <div className="flex-1 min-w-0">
+-        <p className={cn("text-sm font-medium truncate m-0", isCurrentTrack ? "text-primary" : "text-primary/90")}>
++        <p className={cn("text-sm font-semibold truncate m-0 leading-snug", isCurrentTrack ? "text-primary" : "text-primary/90")}>
+           {track.trackName}
+         </p>
+-        <p className="text-[11px] md:text-xs text-muted truncate mt-0.5 m-0 uppercase tracking-wide">
+-          {track.artistName} <span className="hidden sm:inline">· {track.collectionName}</span>
++        <p className="text-[11px] text-muted truncate mt-0.5 m-0 uppercase tracking-wide">
++          {track.artistName}
++          <span className="hidden md:inline"> · {track.collectionName}</span>
+         </p>
+       </div>
+ 
+-      {/* Duration - Hide on very small screens to save space */}
+-      <span className="hidden sm:block text-xs text-muted shrink-0 mr-2">
++      {/* Duration — hidden on mobile, visible on sm+ */}
++      <span className="hidden md:block text-xs text-muted shrink-0 tabular-nums">
+         {formatDuration(track.trackTimeMillis)}
+       </span>
+ 
+-      {/* Add To Playlist button */}
+-      {isPlaylistEnabled && <AddToPlaylistButton trackId={track.trackId} />}
++      {/* Actions container — fixed size to prevent shifting */}
++      <div className="flex items-center gap-2 md:gap-3 shrink-0 ml-auto mr-1">
++        <LikeButton trackId={track.trackId} size={20} className="shrink-0" />
++        
++        <TrackContextMenu track={track} />
+ 
+-      {/* Play button */}
+-      <button
+-        onClick={(e) => { e.stopPropagation(); handlePlay() }}
+-        disabled={!track.previewUrl}
+-        aria-label={isActiveAndPlaying ? "Pause" : "Play preview"}
+-        className={cn(
+-          "size-8 rounded-full border-0 flex items-center justify-center shrink-0 transition-all duration-200",
+-          isActiveAndPlaying
+-            ? "bg-gradient-brand shadow-glow-sm"
+-            : "bg-surface-elevated opacity-0 group-hover:opacity-100",
+-          !track.previewUrl && "cursor-not-allowed !opacity-40"
+-        )}
+-      >
+-        {isActiveAndPlaying ? (
+-          <PauseIcon width={12} height={12} className="text-bg" />
+-        ) : (
+-          <PlayIcon width={12} height={12} className={isCurrentTrack ? "text-primary" : "text-muted"} />
+-        )}
+-      </button>
++        {/* Play button — desktop only. Always occupies space to prevent heart shifting */}
++        <button
++          onClick={(e) => { e.stopPropagation(); handlePlay() }}
++          disabled={!track.previewUrl}
++          aria-label={isActiveAndPlaying ? "Pause" : "Play preview"}
++          className={cn(
++            "size-8 rounded-full border-0 items-center justify-center shrink-0 transition-opacity duration-200 hidden md:flex",
++            isActiveAndPlaying
++              ? "bg-gradient-brand shadow-glow-sm opacity-100"
++              : "bg-surface-elevated opacity-0 group-hover:opacity-100",
++            !track.previewUrl && "cursor-not-allowed !opacity-40"
++          )}
++        >
++          {isActiveAndPlaying ? (
++            <PauseIcon width={12} height={12} className="text-bg" />
++          ) : (
++            <PlayIcon width={12} height={12} className={isCurrentTrack ? "text-primary" : "text-muted"} />
++          )}
++        </button>
++      </div>
+     </div>
+   )
+ }
+diff --git a/components/TrackContextMenu/TrackContextMenu.tsx b/components/TrackContextMenu/TrackContextMenu.tsx
+index 275622c..7567223 100644
+--- a/components/TrackContextMenu/TrackContextMenu.tsx
++++ b/components/TrackContextMenu/TrackContextMenu.tsx
+@@ -4,12 +4,11 @@ import { useEffect, useRef, useState } from "react"
+ import { useRouter } from "next/navigation"
+ import { useAuth } from "@clerk/nextjs"
+ import { CreatePlaylistModal } from "components/CreatePlaylistModal/CreatePlaylistModal"
+-import { AlbumIcon, ArtistIcon, DotsHorizontalIcon, HeartFilledIcon, HeartIcon, PlusIcon, QueueIcon, SpinnerIcon } from "components/icons"
++import { AlbumIcon, ArtistIcon, DotsHorizontalIcon, PlusIcon, QueueIcon, SpinnerIcon } from "components/icons"
+ import { addTrack } from "lib/api/playlists"
+ import { cn } from "lib/cn"
+ import { useRequireAuth } from "lib/hooks/useRequireAuth"
+ import type { ItunesTrack } from "lib/itunes/types"
+-import { useLikeStore } from "store/useLikeStore"
+ import { usePlayerStore } from "store/usePlayerStore"
+ import { usePlaylistStore } from "store/usePlaylistStore"
+ import { useToastStore } from "store/useToastStore"
+@@ -28,9 +27,6 @@ export function TrackContextMenu({ track, variant = "default", className }: Trac
+   const { addToQueue } = usePlayerStore()
+   const { addToast } = useToastStore()
+   const { playlists, isLoading: isPlaylistsLoading } = usePlaylistStore()
+-  const { getToken: getLikeToken } = useAuth()
+-  const { isLiked, toggleLike } = useLikeStore()
+-  const liked = isLiked(track.trackId)
+   
+   const [open, setOpen] = useState(false)
+   const [view, setView] = useState<"main" | "playlists">("main")
+@@ -69,15 +65,6 @@ export function TrackContextMenu({ track, variant = "default", className }: Trac
+     setOpen(false)
+   }
+ 
+-  async function handleToggleLike(e: React.MouseEvent) {
+-    e.stopPropagation()
+-    requireAuth(async () => {
+-      const token = await getLikeToken()
+-      await toggleLike(token, track.trackId)
+-      addToast(liked ? "Removed from Liked Songs" : "Added to Liked Songs")
+-      setOpen(false)
+-    })
+-  }
+ 
+   function handleGoToArtist(e: React.MouseEvent) {
+     e.stopPropagation()
+@@ -141,25 +128,6 @@ export function TrackContextMenu({ track, variant = "default", className }: Trac
+         >
+           {view === "main" ? (
+             <>
+-              {/* Like / Unlike */}
+-              <button
+-                onClick={handleToggleLike}
+-                className={cn(
+-                  "flex items-center gap-3 w-full px-4 py-3 text-sm text-left border-0 cursor-pointer transition-colors",
+-                  isDark
+-                    ? "text-white/90 hover:bg-white/10"
+-                    : "text-primary hover:bg-surface-elevated"
+-                )}
+-              >
+-                {liked
+-                  ? <HeartFilledIcon width={16} height={16} className="shrink-0 text-red-500" />
+-                  : <HeartIcon width={16} height={16} className="shrink-0 text-muted" />
+-                }
+-                {liked ? "Remove from Liked Songs" : "Add to Liked Songs"}
+-              </button>
+-
+-              {/* Divider */}
+-              <div className={cn("h-px mx-3", isDark ? "bg-white/10" : "bg-border")} />
+ 
+               {/* Play Next */}
+               <button
+diff --git a/lib/api/playlists.ts b/lib/api/playlists.ts
+index 9b2b0be..b5e36e8 100644
+--- a/lib/api/playlists.ts
++++ b/lib/api/playlists.ts
+@@ -36,67 +36,7 @@ export interface Playlist {
+   }
+ }
+ 
+-export interface ApiResponse<T> {
+-  data?: T
+-  error?: string
+-}
+-
+-const API_URL = process.env.NEXT_PUBLIC_API_URL
+-
+-async function fetchApi<T>(
+-  endpoint: string,
+-  token: string | null,
+-  options: RequestInit = {}
+-): Promise<ApiResponse<T>> {
+-  try {
+-    const headers: HeadersInit = {
+-      "Content-Type": "application/json",
+-    }
+-
+-    if (token) {
+-      headers.Authorization = `Bearer ${token}`
+-    }
+-
+-    const response = await fetch(`${API_URL}${endpoint}`, {
+-      ...options,
+-      headers: {
+-        ...headers,
+-        ...options.headers,
+-      },
+-    })
+-
+-    if (!response.ok) {
+-      let errorMsg = "An error occurred"
+-      try {
+-        const errorData = await response.json() as Record<string, unknown>
+-        errorMsg = (errorData.error as string) || (errorData.message as string) || errorMsg
+-      } catch {
+-        errorMsg = response.statusText
+-      }
+-      return { error: errorMsg }
+-    }
+-
+-    if (response.status === 204 || response.headers.get("content-length") === "0") {
+-      return { data: { success: true } as unknown as T }
+-    }
+-
+-    let json: unknown
+-    try {
+-      json = await response.json()
+-    } catch {
+-      return { data: {} as T }
+-    }
+-
+-    const data = (json as Record<string, unknown>).data !== undefined
+-      ? (json as Record<string, unknown>).data
+-      : json
+-
+-    return { data: data as T }
+-  } catch (error: unknown) {
+-    console.error(`[fetchApi] Error calling ${endpoint}:`, error)
+-    return { error: error instanceof Error ? error.message : "Network error" }
+-  }
+-}
++import { fetchApi } from "./fetchApi"
+ 
+ export async function getPlaylists(token: string | null) {
+   return fetchApi<Playlist[]>("/api/playlists", token)
+diff --git a/package.json b/package.json
+index fedb61c..8443509 100644
+--- a/package.json
++++ b/package.json
+@@ -128,4 +128,4 @@
+     "node": ">=20.0.0"
+   },
+   "packageManager": "pnpm@10.0.0"
+-}
++}
+\ No newline at end of file
+diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
+index 7e7c9c5..bd6670b 100644
+--- a/pnpm-lock.yaml
++++ b/pnpm-lock.yaml
+@@ -8,6 +8,9 @@ importers:
+ 
+   .:
+     dependencies:
++      '@ai-sdk/groq':
++        specifier: ^3.0.29
++        version: 3.0.29(zod@3.24.4)
+       '@clerk/nextjs':
+         specifier: ^7.0.1
+         version: 7.0.1(next@15.3.8(@babel/core@7.27.1)(@opentelemetry/api@1.7.0)(@playwright/test@1.52.0)(babel-plugin-macros@3.1.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+@@ -86,6 +89,9 @@ importers:
+       '@vercel/otel':
+         specifier: ^1.12.0
+         version: 1.12.0(@opentelemetry/api-logs@0.45.1)(@opentelemetry/api@1.7.0)(@opentelemetry/resources@1.18.1(@opentelemetry/api@1.7.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.7.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.7.0))
++      ai:
++        specifier: ^6.0.116
++        version: 6.0.116(zod@3.24.4)
+       class-variance-authority:
+         specifier: ^0.7.0
+         version: 0.7.1
+@@ -303,6 +309,28 @@ packages:
+   '@adobe/css-tools@4.4.1':
+     resolution: {integrity: sha512-12WGKBQzjUAI4ayyF4IAtfw2QR/IDoqk6jTddXDhtYTJF9ASmoE1zst7cVtP0aL/F1jUJL5r+JxKXKEgHNbEUQ==}
+ 
++  '@ai-sdk/gateway@3.0.66':
++    resolution: {integrity: sha512-SIQ0YY0iMuv+07HLsZ+bB990zUJ6S4ujORAh+Jv1V2KGNn73qQKnGO0JBk+w+Res8YqOFSycwDoWcFlQrVxS4A==}
++    engines: {node: '>=18'}
++    peerDependencies:
++      zod: ^3.25.76 || ^4.1.8
++
++  '@ai-sdk/groq@3.0.29':
++    resolution: {integrity: sha512-I/tUoHuOvGXbIr1dJ0CLRLA7W0UPDMtrYT5mgeb3O+P+6I5BAm/7riPwr22Xw5YTzpwQxcoDQlIczOU9XDXBpA==}
++    engines: {node: '>=18'}
++    peerDependencies:
++      zod: ^3.25.76 || ^4.1.8
++
++  '@ai-sdk/provider-utils@4.0.19':
++    resolution: {integrity: sha512-3eG55CrSWCu2SXlqq2QCsFjo3+E7+Gmg7i/oRVoSZzIodTuDSfLb3MRje67xE9RFea73Zao7Lm4mADIfUETKGg==}
++    engines: {node: '>=18'}
++    peerDependencies:
++      zod: ^3.25.76 || ^4.1.8
++
++  '@ai-sdk/provider@3.0.8':
++    resolution: {integrity: sha512-oGMAgGoQdBXbZqNG0Ze56CHjDZ1IDYOwGYxYjO5KLSlz5HiNQ9udIXsPZ61VWaHGZ5XW/jyjmr6t2xz2jGVwbQ==}
++    engines: {node: '>=18'}
++
+   '@alloc/quick-lru@5.2.0':
+     resolution: {integrity: sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw==}
+     engines: {node: '>=10'}
+@@ -3213,6 +3241,9 @@ packages:
+   '@stablelib/base64@1.0.1':
+     resolution: {integrity: sha512-1bnPQqSxSuc3Ii6MhBysoWCg58j97aUjuCSZrGSmDxNqtytIi0k8utUenAwTZN4V5mXXYGsVUI9zeBqy+jBOSQ==}
+ 
++  '@standard-schema/spec@1.1.0':
++    resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
++
+   '@storybook/addon-actions@8.6.12':
+     resolution: {integrity: sha512-B5kfiRvi35oJ0NIo53CGH66H471A3XTzrfaa6SxXEJsgxxSeKScG5YeXcCvLiZfvANRQ7QDsmzPUgg0o3hdMXw==}
+     peerDependencies:
+@@ -3871,6 +3902,10 @@ packages:
+     resolution: {integrity: sha512-1rYQTCLFFzOI5Nl0c8LUpJT8HxpwVRn9E4CkMsYfuN6ctmQqExjSTzzSk0Tz2apmXy7WU6/6fyaZVVA/thPN+w==}
+     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+ 
++  '@vercel/oidc@3.1.0':
++    resolution: {integrity: sha512-Fw28YZpRnA3cAHHDlkt7xQHiJ0fcL+NRcIqsocZQUSmbzeIKRpwttJjik5ZGanXP+vlA4SbTg+AbA3bP363l+w==}
++    engines: {node: '>= 20'}
++
+   '@vercel/otel@1.12.0':
+     resolution: {integrity: sha512-KiTlMvJf6tjxcJUlpU1u7o1YpTddhx+aLhJ6Obn9dExr3ykVp5Lzi4ACET029TCzJ63NBzcF641rGMZly6x4aw==}
+     engines: {node: '>=18'}
+@@ -4053,6 +4088,12 @@ packages:
+     resolution: {integrity: sha512-gOsf2YwSlleG6IjRYG2A7k0HmBMEo6qVNk9Bp/EaLgAJT5ngH6PXbqa4ItvnEwCm/velL5jAnQgsHsWnjhGmvw==}
+     engines: {node: '>=18'}
+ 
++  ai@6.0.116:
++    resolution: {integrity: sha512-7yM+cTmyRLeNIXwt4Vj+mrrJgVQ9RMIW5WO0ydoLoYkewIvsMcvUmqS4j2RJTUXaF1HphwmSKUMQ/HypNRGOmA==}
++    engines: {node: '>=18'}
++    peerDependencies:
++      zod: ^3.25.76 || ^4.1.8
++
+   ajv-formats@2.1.1:
+     resolution: {integrity: sha512-Wx0Kx52hxE7C18hkMEggYlEifqWZtYaRgouJor+WMdPnQyEK13vgEWyVNup7SoeeoLMsr4kf5h6dOW11I15MUA==}
+     peerDependencies:
+@@ -5282,6 +5323,10 @@ packages:
+     resolution: {integrity: sha512-VARTJ9CYeuQYb0pZEPbzi740OWFgpHe7AYJ2WFZVnUDUQp5Dk2yJUgF36YsZ81cOyxT0QxmXD2EQpapAouzWVA==}
+     engines: {node: '>=18.0.0'}
+ 
++  eventsource-parser@3.0.6:
++    resolution: {integrity: sha512-Vo1ab+QXPzZ4tCa8SwIHJFaSzy4R6SHf7BY79rFBDf0idraZWAkYrDjDj8uWaSm3S2TK+hJ7/t1CEmZ7jXw+pg==}
++    engines: {node: '>=18.0.0'}
++
+   eventsource@3.0.6:
+     resolution: {integrity: sha512-l19WpE2m9hSuyP06+FbuUUf1G+R0SFLrtQfbRb9PRr+oimOfxQhgGCbVaXg5IvZyyTThJsxh6L/srkMiCeBPDA==}
+     engines: {node: '>=18.0.0'}
+@@ -6386,6 +6431,9 @@ packages:
+   json-schema-traverse@1.0.0:
+     resolution: {integrity: sha512-NM8/P9n3XjXhIZn1lLhkFaACTOURQXjWhV4BA/RnOv8xvgqtqpAX9IO4mRQxSx1Rlo4tqzeqb0sOlruaOy3dug==}
+ 
++  json-schema@0.4.0:
++    resolution: {integrity: sha512-es94M3nTIfsEPisRafak+HDLfHXnKBhV3vU5eqPcS3flIWqcxJWgXHXiey3YrpaNsanY5ei1VoYEbOzijuq9BA==}
++
+   json-stable-stringify-without-jsonify@1.0.1:
+     resolution: {integrity: sha512-Bdboy+l7tA3OGW6FjyFHWkP5LuByj1Tk33Ljyq0axyzdk9//JSi2u3fP1QSmd1KNwq6VOKYGlAu87CisVir6Pw==}
+ 
+@@ -8995,6 +9043,30 @@ snapshots:
+ 
+   '@adobe/css-tools@4.4.1': {}
+ 
++  '@ai-sdk/gateway@3.0.66(zod@3.24.4)':
++    dependencies:
++      '@ai-sdk/provider': 3.0.8
++      '@ai-sdk/provider-utils': 4.0.19(zod@3.24.4)
++      '@vercel/oidc': 3.1.0
++      zod: 3.24.4
++
++  '@ai-sdk/groq@3.0.29(zod@3.24.4)':
++    dependencies:
++      '@ai-sdk/provider': 3.0.8
++      '@ai-sdk/provider-utils': 4.0.19(zod@3.24.4)
++      zod: 3.24.4
++
++  '@ai-sdk/provider-utils@4.0.19(zod@3.24.4)':
++    dependencies:
++      '@ai-sdk/provider': 3.0.8
++      '@standard-schema/spec': 1.1.0
++      eventsource-parser: 3.0.6
++      zod: 3.24.4
++
++  '@ai-sdk/provider@3.0.8':
++    dependencies:
++      json-schema: 0.4.0
++
+   '@alloc/quick-lru@5.2.0': {}
+ 
+   '@ampproject/remapping@2.3.0':
+@@ -12156,6 +12228,8 @@ snapshots:
+ 
+   '@stablelib/base64@1.0.1': {}
+ 
++  '@standard-schema/spec@1.1.0': {}
++
+   '@storybook/addon-actions@8.6.12(storybook@8.6.12(prettier@3.0.3))':
+     dependencies:
+       '@storybook/global': 5.0.0
+@@ -13034,6 +13108,8 @@ snapshots:
+       '@typescript-eslint/types': 8.32.0
+       eslint-visitor-keys: 4.2.0
+ 
++  '@vercel/oidc@3.1.0': {}
++
+   '@vercel/otel@1.12.0(@opentelemetry/api-logs@0.45.1)(@opentelemetry/api@1.7.0)(@opentelemetry/resources@1.18.1(@opentelemetry/api@1.7.0))(@opentelemetry/sdk-metrics@2.2.0(@opentelemetry/api@1.7.0))(@opentelemetry/sdk-trace-base@2.2.0(@opentelemetry/api@1.7.0))':
+     dependencies:
+       '@opentelemetry/api': 1.7.0
+@@ -13272,6 +13348,14 @@ snapshots:
+       clean-stack: 5.2.0
+       indent-string: 5.0.0
+ 
++  ai@6.0.116(zod@3.24.4):
++    dependencies:
++      '@ai-sdk/gateway': 3.0.66(zod@3.24.4)
++      '@ai-sdk/provider': 3.0.8
++      '@ai-sdk/provider-utils': 4.0.19(zod@3.24.4)
++      '@opentelemetry/api': 1.9.0
++      zod: 3.24.4
++
+   ajv-formats@2.1.1(ajv@8.17.1):
+     optionalDependencies:
+       ajv: 8.17.1
+@@ -14825,6 +14909,8 @@ snapshots:
+ 
+   eventsource-parser@3.0.1: {}
+ 
++  eventsource-parser@3.0.6: {}
++
+   eventsource@3.0.6:
+     dependencies:
+       eventsource-parser: 3.0.1
+@@ -16272,6 +16358,8 @@ snapshots:
+ 
+   json-schema-traverse@1.0.0: {}
+ 
++  json-schema@0.4.0: {}
++
+   json-stable-stringify-without-jsonify@1.0.1: {}
+ 
+   json-stable-stringify@1.2.1:
+diff --git a/store/usePlayerStore.ts b/store/usePlayerStore.ts
+index 4086afb..2310e3a 100644
+--- a/store/usePlayerStore.ts
++++ b/store/usePlayerStore.ts
+@@ -5,17 +5,31 @@
+ 
+ import { create } from "zustand"
+ 
++import { shuffleArray } from "lib/itunes/utils"
+ import type { ItunesTrack } from "lib/itunes/types"
+ 
+ type PlayerState = {
+   currentTrack: ItunesTrack | null
+   isPlaying: boolean
+   volume: number
++  queue: ItunesTrack[] // Explicit user queue (Next Up)
++  contextQueue: ItunesTrack[] // Original context (Album/Playlist)
++  originalContextTracks: ItunesTrack[] // Full context in original order
++  history: ItunesTrack[]
++  isShuffled: boolean
++  isRepeat: boolean
++  playbackContext: "search" | "library" | "album" | null
+ }
+ 
+ type PlayerActions = {
+-  playTrack: (track: ItunesTrack) => void
++  playTrack: (track: ItunesTrack, context?: "search" | "library" | "album" | null) => void
++  playContext: (tracks: ItunesTrack[], startIndex: number, context?: "search" | "library" | "album" | null) => void
++  playNext: () => void
++  playPrevious: () => void
++  addToQueue: (track: ItunesTrack) => void
+   togglePlay: () => void
++  toggleShuffle: () => void
++  toggleRepeat: () => void
+   stop: () => void
+   setVolume: (volume: number) => void
+ }
+@@ -26,11 +40,153 @@ export const usePlayerStore = create<PlayerStore>((set) => ({
+   currentTrack: null,
+   isPlaying: false,
+   volume: 1,
++  queue: [],
++  contextQueue: [],
++  originalContextTracks: [],
++  history: [],
++  isShuffled: false,
++  isRepeat: false,
++  playbackContext: null,
+ 
+-  playTrack: (track) => set({ currentTrack: track, isPlaying: true }),
++  playTrack: (track, context = null) => set({
++    currentTrack: track,
++    isPlaying: true,
++    contextQueue: [], // Reset context when jumping to a specific track
++    queue: [], // Clear user queue for single track playback
++    playbackContext: context
++  }),
++
++  playContext: (tracks, startIndex, context = null) => {
++    const track = tracks[startIndex]
++    if (!track) return
++
++    const remainingTracks = tracks.slice(startIndex + 1)
++    const store = usePlayerStore.getState()
++
++    set({
++      currentTrack: track,
++      isPlaying: true,
++      originalContextTracks: tracks,
++      contextQueue: store.isShuffled ? shuffleArray(remainingTracks) : remainingTracks,
++      history: tracks.slice(0, startIndex),
++      queue: [], // Clear user queue when starting a new context
++      playbackContext: context
++    })
++  },
++
++  playNext: () => set((state) => {
++    let nextTrack: ItunesTrack | undefined
++    let newQueue = state.queue
++    let newContextQueue = state.contextQueue
++
++    // 1. Try User Queue first (Explicit 'Add to Queue' items)
++    if (newQueue.length > 0) {
++      [nextTrack, ...newQueue] = newQueue
++    }
++    // 2. Fallback to Context Queue
++    else if (newContextQueue.length > 0) {
++      [nextTrack, ...newContextQueue] = newContextQueue
++    }
++
++    if (!nextTrack) {
++      // Loop back if we have history
++      if (state.history.length > 0) {
++        const fullHistory = [...state.history, state.currentTrack].filter(Boolean) as ItunesTrack[]
++        const [first, ...rest] = fullHistory
++        return {
++          currentTrack: first,
++          contextQueue: rest,
++          queue: [],
++          history: [],
++          isPlaying: true
++        }
++      }
++      return { isPlaying: false }
++    }
++
++    const newHistory = state.currentTrack
++      ? [...state.history, state.currentTrack]
++      : state.history
++
++    return {
++      currentTrack: nextTrack,
++      queue: newQueue,
++      contextQueue: newContextQueue,
++      history: newHistory,
++      isPlaying: true
++    }
++  }),
++
++  playPrevious: () => set((state) => {
++    if (state.history.length === 0) {
++      // Loop to end context
++      if (state.contextQueue.length > 0 || state.queue.length > 0) {
++        const fullFuture = [state.currentTrack, ...state.queue, ...state.contextQueue].filter(Boolean) as ItunesTrack[]
++        const last = fullFuture[fullFuture.length - 1]
++        const rest = fullFuture.slice(0, -1)
++        return {
++          currentTrack: last,
++          history: rest,
++          queue: [],
++          contextQueue: [],
++          isPlaying: true
++        }
++      }
++      return state
++    }
++
++    const previousTrack = state.history[state.history.length - 1]
++    const newHistory = state.history.slice(0, -1)
++
++    // Put current track back to the START of upcoming content
++    // We prioritize the context queue for returning tracks unless we want them back in explicit queue.
++    // For simplicity, we'll put it at the start of contextQueue to resume flow.
++    const newContextQueue = state.currentTrack
++      ? [state.currentTrack, ...state.contextQueue]
++      : state.contextQueue
++
++    return {
++      currentTrack: previousTrack,
++      history: newHistory,
++      contextQueue: newContextQueue,
++      isPlaying: true
++    }
++  }),
++
++  addToQueue: (track) => set((state) => ({
++    // Append to User Queue so they play in order of addition (B, then C)
++    // The playNext logic will pick from this array before checking contextQueue.
++    queue: [...state.queue, track]
++  })),
+ 
+   togglePlay: () => set((state) => ({ isPlaying: !state.isPlaying })),
+ 
++  toggleShuffle: () => set((state) => {
++    const newIsShuffled = !state.isShuffled
++    if (newIsShuffled) {
++      // Shuffling: randomize only the contextQueue
++      return {
++        isShuffled: true,
++        contextQueue: shuffleArray(state.contextQueue)
++      }
++    } else {
++      // Unshuffling: restore original context order from current point
++      if (!state.currentTrack) return { isShuffled: false }
++      
++      const currentIndex = state.originalContextTracks.findIndex(t => t.trackId === state.currentTrack?.trackId)
++      const restoredQueue = currentIndex !== -1 
++        ? state.originalContextTracks.slice(currentIndex + 1)
++        : state.contextQueue
++
++      return {
++        isShuffled: false,
++        contextQueue: restoredQueue
++      }
++    }
++  }),
++
++  toggleRepeat: () => set((state) => ({ isRepeat: !state.isRepeat })),
++
+   stop: () => set({ currentTrack: null, isPlaying: false }),
+ 
+   setVolume: (volume) => set({ volume }),

@@ -23,11 +23,24 @@ import { LikeButton } from "components/LikeButton/LikeButton"
 import { ScrollingText } from "components/ScrollingText/ScrollingText"
 import { TrackContextMenu } from "components/TrackContextMenu/TrackContextMenu"
 import { cn } from "lib/cn"
-import { searchSongs } from "lib/itunes/api"
+import { fetchTracksByIds, searchSongs } from "lib/itunes/api"
 import type { ItunesTrack } from "lib/itunes/types"
 import { formatDuration } from "lib/itunes/utils"
 import { useAppStore } from "store/useAppStore"
+import { useDiscoveryStore } from "store/useDiscoveryStore"
+import { useLikeStore } from "store/useLikeStore"
 import { usePlayerStore } from "store/usePlayerStore"
+
+// Unified logging helper for frontend
+async function unifiedLog(level: "INFO" | "WARN" | "ERROR", message: string, data?: any) {
+  try {
+    fetch("/api/logs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ level, message, data }),
+    }).catch(() => {}) // Fire and forget in background
+  } catch (e) {}
+}
 
 export function MiniPlayer() {
   const { 
@@ -35,8 +48,11 @@ export function MiniPlayer() {
     playNext, playPrevious, isShuffled, toggleShuffle, isRepeat, toggleRepeat 
   } = usePlayerStore()
   const { isSidebarCollapsed, isFullPagePlayerOpen, setFullPagePlayerOpen } = useAppStore()
+  const { recordListen, getSkippedGenres, getEngagedGenres } = useDiscoveryStore()
+  const { likedIds } = useLikeStore()
   const router = useRouter()
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const listenStartRef = useRef<{ track: ItunesTrack; startTime: number } | null>(null)
 
   const [progress, setProgress] = useState(0)
   const [currentTime, setCurrentTime] = useState(0)
@@ -55,31 +71,64 @@ export function MiniPlayer() {
 
   // Load and play new track when currentTrack changes
   useEffect(() => {
-    if (!currentTrack?.previewUrl) return
-    
-    // Always create a new audio element to guarantee a clean slate and avoid Safari/Chrome media race conditions
-    if (audioRef.current) {
-      audioRef.current.pause()
-      audioRef.current.src = ""
+    if (!audioRef.current) {
+      const audio = new Audio()
+      audio.crossOrigin = "anonymous"
+      audioRef.current = audio
+    }
+    const audio = audioRef.current
+
+    // Record how much of the previous track was listened to (even if new one is null)
+    if (listenStartRef.current?.track && audio) {
+      const ratio = audio.duration ? audio.currentTime / audio.duration : 0
+      const secondsEngaged = audio.currentTime
+      const status = ratio < 0.33 ? "SKIPPED ⏭️" : ratio > 0.85 ? "COMPLETED ✅" : "ENGAGED 🎧"
+      
+      unifiedLog("INFO", `Track Finished: "${listenStartRef.current.track.trackName}"`, {
+        artist: listenStartRef.current.track.artistName,
+        duration: `${secondsEngaged.toFixed(1)}s / ${audio.duration.toFixed(1)}s`,
+        ratio: (ratio * 100).toFixed(0) + "%",
+        outcome: status
+      })
+
+      recordListen({
+        trackId: listenStartRef.current.track.trackId,
+        artistName: listenStartRef.current.track.artistName,
+        genre: listenStartRef.current.track.primaryGenreName,
+        listenRatio: ratio,
+      })
+      listenStartRef.current = null // Clear it
+    }
+
+    if (!currentTrack?.previewUrl) {
+      if (audio) {
+        audio.pause()
+        audio.src = ""
+      }
+      return
     }
     
-    const audio = new Audio()
-    // Important: crossOrigin allows properly tracking media events sometimes blocked otherwise
-    audio.crossOrigin = "anonymous" 
-    audioRef.current = audio
+    // Set the new start reference
+    listenStartRef.current = { track: currentTrack, startTime: Date.now() }
 
-    audio.src = currentTrack.previewUrl
-    audio.volume = volume
+    if (audio) {
+      audio.pause()
+      audio.src = currentTrack.previewUrl
+      audio.volume = volume
 
-    // Playback starting logic
-    audio.play().catch((e) => {
-      console.error("[MiniPlayer] Autoplay failed:", e)
-    })
+      console.info(`[Playback] Starting: "${currentTrack.trackName}" by ${currentTrack.artistName}`)
+
+      // Playback starting logic
+      if (isPlaying) {
+        audio.play().catch((e) => {
+          console.error("[MiniPlayer] Play failed:", e)
+        })
+      }
+    }
     
     setProgress(0)
     setCurrentTime(0)
-    
-  }, [currentTrack?.previewUrl])
+  }, [currentTrack?.trackId]) // Use trackId for stability
 
   // Sync play/pause
   useEffect(() => {
@@ -104,19 +153,24 @@ export function MiniPlayer() {
     
     const onEnded = async () => {
       const store = usePlayerStore.getState()
+      console.info("[MiniPlayer] Track ended. Checking next...", { isRepeat, isFetching: isFetchingDiscovery })
       
       if (isRepeat) {
+        console.info("[MiniPlayer] Repeat is ON. Restarting.")
         audio.currentTime = 0
         audio.play().catch(() => { })
       } else {
-        // Check if there's anything upcoming in either queue
+        // Check if there's anything upcoming
         if (store.queue.length > 0 || store.contextQueue.length > 0) {
+          console.info("[MiniPlayer] Advancing to next track.")
           store.playNext()
-        } else if (store.currentTrack) {
-          // Fallback handled in discovery useEffect primarily, 
-          // but we keep this as a safety net.
-          store.stop()
+        } else if (isFetchingDiscovery) {
+          // If we're waiting for AI, stay in active state but wait for the fetch to inject tracks
+          console.info("[MiniPlayer] Queue empty but discovery in progress. Waiting...")
+          audio.pause()
+          setProgress(1)
         } else {
+          console.info("[MiniPlayer] Queue empty. Stopping playback.")
           store.stop()
         }
       }
@@ -135,7 +189,11 @@ export function MiniPlayer() {
     if (!currentTrack || playbackContext !== "search") return
     
     // Only fetch if queue is actually empty (discovery mode)
-    if (store.queue.length > 0 || store.contextQueue.length > 0) return
+    const totalUpcoming = store.queue.length + store.contextQueue.length
+    if (totalUpcoming > 1) {
+      // console.info(`[Discovery] Skipping fetch, ${totalUpcoming} items remaining`)
+      return
+    }
     if (isFetchingDiscovery) return
 
     async function triggerDiscovery() {
@@ -144,20 +202,48 @@ export function MiniPlayer() {
       console.info(`[Discovery] Triggering for: ${currentTrack.trackName} (${currentTrack.primaryGenreName})`)
 
       try {
+        // Collect liked context — read from store at call time to avoid stale closure
+        const likedIdArray = Array.from(useLikeStore.getState().likedIds).slice(-50) // last 50 liked for richer context
+        let likedArtists: string[] = []
+        let likedGenres: string[] = []
+
+        if (likedIdArray.length > 0) {
+          try {
+            const likedTracks = await fetchTracksByIds(likedIdArray)
+            likedArtists = Array.from(new Set(likedTracks.map((t) => t.artistName))).slice(0, 15)
+            likedGenres = Array.from(new Set(likedTracks.map((t) => t.primaryGenreName))).slice(0, 8)
+            console.info(`[Discovery] Context built from ${likedTracks.length} liked tracks`)
+          } catch (err) {
+            console.warn("[Discovery] Failed to fetch liked track metadata:", err)
+          }
+        }
+
         const res = await fetch("/api/ai/autoplay", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ genre: currentTrack.primaryGenreName || "Music" })
+          body: JSON.stringify({ 
+            genre: currentTrack.primaryGenreName || "Music",
+            likedArtists,
+            likedGenres,
+            skippedGenres: getSkippedGenres(),
+            engagedGenres: getEngagedGenres()
+          })
         })
 
         if (!res.ok) throw new Error("Discovery API failed")
-        const { suggestions } = await res.json() as { suggestions: string[] }
-        console.info(`[Discovery] Received AI Suggestions:`, suggestions)
+        const { suggestions, reasoning } = await res.json() as { suggestions: string[], reasoning: string }
+        console.info(`[Discovery] AI Logic: "${reasoning}"`)
 
-        // Fetch top songs for these suggestions
-        console.info(`[Discovery] Searching iTunes for related tracks...`)
+        // 1. Filter out suggestions that are already in the "Liked Artists" list to ensure discovery
+        const filteredSuggestions = suggestions.filter(
+          s => !likedArtists.some(a => a.toLowerCase() === s.toLowerCase())
+        )
+        console.info(`[Discovery] Suggestions (post-filter):`, filteredSuggestions)
+
+        // Fetch top songs for filtered suggestions
+        console.info(`[Discovery] Searching iTunes for ${filteredSuggestions.length} suggestions...`)
         const tracksResults = await Promise.allSettled(
-          suggestions.slice(0, 3).map(s => {
+          filteredSuggestions.map(s => {
             console.info(`[Discovery] -> Fetching for suggestion: "${s}"`)
             return searchSongs(s)
           })
@@ -166,15 +252,45 @@ export function MiniPlayer() {
         const discoveryTracks: ItunesTrack[] = []
         for (const r of tracksResults) {
           if (r.status === "fulfilled") {
-            // Take 2 tracks per suggestion
             discoveryTracks.push(...r.value.slice(0, 2))
           }
         }
 
         if (discoveryTracks.length > 0) {
-          console.info(`[Discovery] Injected ${discoveryTracks.length} tracks into queue`)
-          // Update store's contextQueue directly
-          usePlayerStore.setState({ contextQueue: discoveryTracks })
+          const currentState = usePlayerStore.getState()
+          
+          // 2. Deduplicate tracks against history AND existing queues
+          const seenIds = new Set([
+            ...currentState.history.map(t => t.trackId),
+            ...currentState.queue.map(t => t.trackId),
+            ...currentState.contextQueue.map(t => t.trackId),
+            currentState.currentTrack?.trackId
+          ].filter(Boolean))
+
+          const freshTracks = discoveryTracks.filter(t => !seenIds.has(t.trackId))
+
+          if (freshTracks.length > 0) {
+            unifiedLog("INFO", `Discovery Batch Injected: ${freshTracks.length} tracks`, {
+              artists: freshTracks.map(t => t.artistName),
+              reasoning: reasoning
+            })
+
+            // 3. Append to contextQueue instead of replacing it
+            usePlayerStore.setState((state) => ({ 
+              contextQueue: [...state.contextQueue, ...freshTracks] 
+            }))
+          } else {
+            console.warn("[Discovery-Batch] Zero fresh tracks after deduplication. AI suggested duplicates or already played content.")
+          }
+
+          // If the player literally just finished and is waiting (stuck at end), advance now
+          if (!currentState.currentTrack || (audioRef.current && (audioRef.current.ended || audioRef.current.paused && audioRef.current.currentTime > 0))) {
+            const updatedState = usePlayerStore.getState()
+            if (updatedState.contextQueue.length > 0) {
+              console.info("[Discovery] Player was waiting for tracks. Resuming now.")
+              updatedState.playNext()
+            }
+          }
         }
       } catch (err) {
         console.error("[Discovery] Failed:", err)
@@ -703,19 +819,19 @@ export function MiniPlayer() {
 
             <div className="w-px h-5 bg-border mx-1" />
 
-            {/* Pop out */}
+            {/* Expand to full page */}
             <button
-              onClick={() => setIsPopped(true)}
-              title="Pop out player"
+              onClick={() => setFullPagePlayerOpen(true)}
+              title="Full page player"
               className="size-7 flex items-center justify-center rounded-md text-muted hover:text-primary hover:bg-surface-elevated transition-colors"
             >
               <MaximizeIcon width={15} height={15} />
             </button>
 
-            {/* Expand to full page */}
+            {/* Pop out */}
             <button
-              onClick={() => setFullPagePlayerOpen(true)}
-              title="Full page player"
+              onClick={() => setIsPopped(true)}
+              title="Pop out player"
               className="size-7 flex items-center justify-center rounded-md text-muted hover:text-primary hover:bg-surface-elevated transition-colors"
             >
               <ChevronUpIcon width={15} height={15} />
